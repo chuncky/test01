@@ -50,33 +50,39 @@ $(obj)/Image: vmlinux FORCE
 	$(call if_changed,objcopy)
 	@echo '  Kernel: $@ is ready'
 	@echo '  Kernel: Copy Image to image/'
-ifeq ($(CONFIG_CPU_NUC910),y)
+ifeq ($(CONFIG_CPU_W90P910),y)
 	cp $@	../image/910kernel
 	zip ../image/910kernel.zip ../image/910kernel
-else
+endif
 ifeq ($(CONFIG_CPU_NUC920),y)
 	cp $@   ../image/920kernel
 	zip ../image/920kernel.zip ../image/920kernel
-else
+endif
 ifeq ($(CONFIG_CPU_NUC960),y)
 	cp $@   ../image/960kernel
 	zip ../image/960kernel.zip ../image/960kernel
-else
+endif
 ifeq ($(CONFIG_CPU_NUC950),y)
 	cp $@   ../image/950kernel
 	zip ../image/950kernel.zip ../image/950kernel
-else
+endif
 ifeq ($(CONFIG_CPU_NUC945),y)
 	cp $@   ../image/945kernel
 	zip ../image/945kernel.zip ../image/945kernel
-else
-	cp $@   ../image/kernel
-	zip ../image/kernel.zip ../image/kernel
 endif
+ifeq ($(CONFIG_CPU_NUC951),y)
+	cp $@   ../image/951kernel
+	zip ../image/951kernel.zip ../image/951kernel
 endif
+ifeq ($(CONFIG_CPU_NUC952),y)
+	cp $@   ../image/952kernel
+	zip ../image/952kernel.zip ../image/952kernel
 endif
+ifeq ($(CONFIG_CPU_NUC946),y)
+	cp $@   ../image/946kernel
+	zip ../image/946kernel.zip ../image/946kernel
 endif
-endif
+
 
 $(obj)/compressed/vmlinux: $(obj)/Image FORCE
 	$(Q)$(MAKE) $(build)=$(obj)/compressed $@

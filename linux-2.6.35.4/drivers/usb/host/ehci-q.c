@@ -40,6 +40,16 @@
 
 /*-------------------------------------------------------------------------*/
 
+#define FORCE_BULKOUT_ALIGN
+
+#ifdef FORCE_BULKOUT_ALIGN
+// yc, for BULK OUT alignment
+dma_addr_t  bulkout_x_dma, bulkout_backup_dma;
+static u8  *bulkout_x_buffer = NULL, *bulkout_backup_tbuf;
+static volatile int  is_bulkout_x_buffer_used = 0;
+#endif
+
+
 /* fill a qtd, returning how much of the buffer we were able to queue up */
 
 static int
@@ -287,6 +297,17 @@ __acquires(ehci->lock)
 		usb_pipein (urb->pipe) ? "in" : "out",
 		status,
 		urb->actual_length, urb->transfer_buffer_length);
+#endif
+
+#ifdef FORCE_BULKOUT_ALIGN	// yc, recover BULK OUT buffer pointer if replaced
+	if (usb_pipeout(urb->pipe) && usb_pipeendpoint(urb->pipe) &&
+		is_bulkout_x_buffer_used && (urb->transfer_dma == bulkout_x_dma))
+	{
+		urb->transfer_dma = bulkout_backup_dma;
+		urb->transfer_buffer = bulkout_backup_tbuf;
+		is_bulkout_x_buffer_used = 0;
+		//("OUT - %d\n", urb->transfer_buffer_length);	// yc
+	}
 #endif
 
 	/* complete() can reenter this HCD */
@@ -630,6 +651,43 @@ qh_urb_transaction (
 		return NULL;
 	list_add_tail (&qtd->qtd_list, head);
 	qtd->urb = urb;
+
+#ifdef FORCE_BULKOUT_ALIGN	// yc, check BULK OUT DMA buffer and force 4K aligned
+	if (usb_pipeout(urb->pipe) && usb_pipeendpoint(urb->pipe) &&
+		(urb->transfer_buffer_length <= 60*1024) && (urb->transfer_dma & 0xfff))
+	{
+		if (bulkout_x_buffer == NULL)
+		{
+			bulkout_x_buffer = usb_alloc_coherent(urb->dev, 64*1024, GFP_KERNEL, &bulkout_x_dma);
+			if (bulkout_x_buffer == NULL)
+				printk("bulkout_x_buffer alloc failed!!\n");
+			else
+			{
+				bulkout_x_buffer = ((u32)bulkout_x_buffer + 0xfff) & ~0xfff;
+				bulkout_x_dma = ((u32)bulkout_x_dma + 0xfff) & ~0xfff;
+			}
+		}
+		
+		//if (urb->transfer_buffer == NULL)
+		//	printk("transfer_buffer is NULL!\n");	// likely
+			
+		if ((bulkout_x_buffer != NULL) && (urb->transfer_buffer != NULL))
+		{
+			if (is_bulkout_x_buffer_used)
+				printk("Warning! - BULKOUT DMA buffer used.\n");
+			else
+			{
+				//printk("TX - %d, 0x%x\n", urb->transfer_buffer_length, urb->transfer_dma);	// yc
+				is_bulkout_x_buffer_used = 1;
+				bulkout_backup_dma = urb->transfer_dma;
+				bulkout_backup_tbuf = urb->transfer_buffer;
+				urb->transfer_dma = bulkout_x_dma;
+				urb->transfer_buffer = bulkout_x_buffer;
+				memcpy(bulkout_x_buffer, bulkout_backup_tbuf, urb->transfer_buffer_length);
+			}
+		}
+	}
+#endif
 
 	token = QTD_STS_ACTIVE;
 	token |= (EHCI_TUNE_CERR << 10);

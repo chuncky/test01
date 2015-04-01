@@ -137,7 +137,7 @@ static int nuc900_i2s_trigger(struct snd_pcm_substream *substream,
                         tmp = AUDIO_READ(nuc900_audio->mmio + ACTL_PSR);
                         tmp |= (P_DMA_END_IRQ | P_DMA_MIDDLE_IRQ);
                         AUDIO_WRITE(nuc900_audio->mmio + ACTL_PSR, tmp);
-                        val |= IIS_PLAY;
+                        val |= IIS_PLAY;                        
                 } else {
                         tmp = AUDIO_READ(nuc900_audio->mmio + ACTL_RSR);
                         tmp |= (R_DMA_END_IRQ | R_DMA_MIDDLE_IRQ);
@@ -241,7 +241,8 @@ static int __devinit nuc900_i2s_drvprobe(struct platform_device *pdev)
                 return -ENOMEM;
 
         spin_lock_init(&nuc900_audio->lock);
-
+		spin_lock_init(&nuc900_audio->irqlock);		
+        
         nuc900_audio->res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
         if (!nuc900_audio->res) {
                 ret = -ENODEV;
@@ -272,7 +273,11 @@ static int __devinit nuc900_i2s_drvprobe(struct platform_device *pdev)
                 ret = -EBUSY;
                 goto out2;
         }
-
+		
+		ret = nuc900_dma_create(nuc900_audio);
+		if (ret != 0)
+			return ret;
+		
         nuc900_i2s_data = nuc900_audio;
 
         nuc900_audio->dev = nuc900_i2s_dai.dev =  &pdev->dev;
@@ -299,7 +304,8 @@ out0:
 
 static int __devexit nuc900_i2s_drvremove(struct platform_device *pdev)
 {
-
+		nuc900_dma_destroy(nuc900_i2s_data);
+		
         snd_soc_unregister_dai(&nuc900_i2s_dai);
 
         clk_put(nuc900_i2s_data->clk);
@@ -318,7 +324,7 @@ static struct platform_driver nuc900_i2s_driver = {
                 .owner	= THIS_MODULE,
         },
         .probe		= nuc900_i2s_drvprobe,
-                  .remove		= __devexit_p(nuc900_i2s_drvremove),
+        .remove		= __devexit_p(nuc900_i2s_drvremove),
                      };
 
 static int __init nuc900_i2s_init(void)

@@ -133,15 +133,14 @@
 
 struct nuc900_audio {
 	void __iomem *mmio;
-	spinlock_t lock;
+	spinlock_t irqlock, lock;
 	dma_addr_t dma_addr[2];
 	unsigned long buffersize[2];
 	unsigned long irq_num;
-	struct snd_pcm_substream *substream;
+	struct snd_pcm_substream *substream[2];
 	struct resource *res;
 	struct clk *clk;
-	struct device *dev;
-
+	struct device *dev;	
 };
 
 #ifdef CONFIG_SND_SOC_NUC900EVB_AC97
@@ -155,5 +154,8 @@ extern struct nuc900_audio *nuc900_i2s_data;
 extern struct snd_soc_dai nuc900_i2s_dai;
 extern struct snd_soc_platform nuc900_soc_platform;
 #endif
+
+int nuc900_dma_create(struct nuc900_audio *nuc900_audio);
+int nuc900_dma_destroy(struct nuc900_audio *nuc900_audio);
 
 #endif /*end _NUC900_AUDIO_H */

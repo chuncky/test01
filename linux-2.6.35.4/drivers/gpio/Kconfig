@@ -70,6 +70,12 @@ config GPIO_MAX730X
 
 comment "Memory mapped GPIO expanders:"
 
+config GPIO_NUC900
+	tristate "NUC900 GPIO support"
+	depends on GPIOLIB
+	help
+	  Say yes here to support GPIO functionality of nuc900 chip
+
 config GPIO_IT8761E
 	tristate "IT8761E GPIO support"
 	depends on GPIOLIB

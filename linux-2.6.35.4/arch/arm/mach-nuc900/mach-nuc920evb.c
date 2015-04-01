@@ -1,5 +1,5 @@
 /*
- * linux/arch/arm/mach-w90x900/mach-nuc960evb.c
+ * linux/arch/arm/mach-w90x900/mach-nuc920evb.c
  *
  * Based on mach-s3c2410/mach-smdk2410.c by Jonas Dietsche
  *
@@ -19,26 +19,26 @@
 #include <asm/mach-types.h>
 #include <mach/map.h>
 
-#include "nuc960.h"
+#include "nuc920.h"
 
-static void __init nuc960evb_map_io(void)
+static void __init nuc920evb_map_io(void)
 {
-	nuc960_map_io();
-	nuc960_init_clocks();
+	nuc920_map_io();
+	nuc920_init_clocks();
 }
 
-static void __init nuc960evb_init(void)
+static void __init nuc920evb_init(void)
 {
-	nuc960_board_init();
+	nuc920_board_init();
 }
 
-MACHINE_START(W90X900, "W90N960EVB")
+MACHINE_START(W90X900, "W90P920EVB")
 	/* Maintainer: Wan ZongShun */
 	.phys_io	= W90X900_PA_UART,
 	.io_pg_offst	= (((u32)W90X900_VA_UART) >> 18) & 0xfffc,
 	.boot_params	= 0x100,
-	.map_io		= nuc960evb_map_io,
+	.map_io		= nuc920evb_map_io,
 	.init_irq	= nuc900_init_irq,
-	.init_machine	= nuc960evb_init,
+	.init_machine	= nuc920evb_init,
 	.timer		= &nuc900_timer,
 MACHINE_END

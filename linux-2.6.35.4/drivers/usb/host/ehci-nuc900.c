@@ -45,7 +45,7 @@ static int usb_nuc900_probe(const struct hc_driver *driver,
 {
         struct usb_hcd *hcd;
         struct ehci_hcd *ehci;
-        u32  physical_map_ehci;
+        u32  physical_map_ehci, physical_map_ohci;
         int retval;
 
         if (IS_ERR(clk_get(&pdev->dev, NULL))) {
@@ -94,6 +94,38 @@ static int usb_nuc900_probe(const struct hc_driver *driver,
         physical_map_ehci = (u32)ehci->caps;
         __raw_writel(0x160, physical_map_ehci+0xC4);
         __raw_writel(0x520, physical_map_ehci+0xC8);
+
+	/* for EV board */
+	if (request_mem_region(0xB0007000, 0x400, hcd_name))
+	{
+		physical_map_ohci = ioremap(0xB0007000, 0x400);
+		if (physical_map_ohci != NULL)
+		{
+			__raw_writel(0x08, physical_map_ohci+0x204);
+
+#if 1 
+			// USB host port reset failed with some USB 2.0 device => 
+ 	  		// After turning the port power on, these devices will drive a 
+ 	  		// short K state to bus. This makes the host recognizing it to 
+ 	  		// be a low-speed device. It will cause the port reset failed. 
+ 	  		// It's necessary to turn on port power in OHCI (USB 1.1 host) 
+ 	  		// mode then change the port owner to EHCI (USB 2.0 host) 
+ 	  		// controller to avoid this issue.
+ 			__raw_writel(0x10000, physical_map_ohci+0x50);		// HC_RH_STATUS, set OHCI global power 
+ 			msleep(100);
+ 			// enable EHCI and port power
+ 			__raw_writel(0x01, physical_map_ehci+0x60);		// UCFGR
+ 			__raw_writel(0x1000, physical_map_ehci+0x64);	// UPSCR0
+ 			__raw_writel(0x1000, physical_map_ehci+0x68);	// UPSCR1
+#endif
+			iounmap(physical_map_ohci);
+		}
+		release_mem_region(0xB0007000, 0x400);
+	}
+	else
+	{
+		printk("usb_nuc900_probe - Failed to set board!\n"); 
+	}
 
 
         /* cache this readonly data; minimize chip reads */
@@ -232,5 +264,5 @@ static void __exit ehci_nuc900_cleanup(void)
 
 }
 
-module_init(ehci_nuc900_init);
-module_exit(ehci_nuc900_cleanup);
+//module_init(ehci_nuc900_init);
+//module_exit(ehci_nuc900_cleanup);

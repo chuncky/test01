@@ -35,7 +35,7 @@ static const struct snd_pcm_hardware nuc900_pcm_hardware = {
         .formats		= SNDRV_PCM_FMTBIT_S16_LE,
         .channels_min		= 1,
         .channels_max		= 2,
-        .buffer_bytes_max	= 16*1024,
+        .buffer_bytes_max	= 64*1024,
         .period_bytes_min	= 1*1024,
         .period_bytes_max	= 16*1024,
         .periods_min		= 1,
@@ -50,21 +50,21 @@ static int nuc900_dma_hw_params(struct snd_pcm_substream *substream,
         unsigned long flags;
         int ret = 0;
 
-        spin_lock_irqsave(&nuc900_audio->lock, flags);
+        spin_lock_irqsave(&nuc900_audio->irqlock, flags);
 
-        if (nuc900_audio->substream == NULL) {
-                ret = snd_pcm_lib_malloc_pages(substream, params_buffer_bytes(params));
-                if (ret < 0)
-                        return ret;
+        if(runtime->dma_addr == 0) {
+            ret = snd_pcm_lib_malloc_pages(substream, params_buffer_bytes(params));
+            if (ret < 0)
+                    return ret;
 
-                nuc900_audio->substream = substream;
+        	nuc900_audio->substream[substream->stream] = substream;        	
         }
 
         nuc900_audio->dma_addr[substream->stream] = runtime->dma_addr;
         nuc900_audio->buffersize[substream->stream] =
                 params_buffer_bytes(params);
 
-        spin_unlock_irqrestore(&nuc900_audio->lock, flags);
+        spin_unlock_irqrestore(&nuc900_audio->irqlock, flags);
 
         return ret;
 }
@@ -88,75 +88,55 @@ static void nuc900_update_dma_register(struct snd_pcm_substream *substream,
         AUDIO_WRITE(mmio_len, count);
 }
 
-static void nuc900_dma_start(struct snd_pcm_substream *substream)
-{
-        struct snd_pcm_runtime *runtime = substream->runtime;
-        struct nuc900_audio *nuc900_audio = runtime->private_data;
-        unsigned long val;
-
-        val = AUDIO_READ(nuc900_audio->mmio + ACTL_CON);
-        val |= (T_DMA_IRQ | R_DMA_IRQ);
-        AUDIO_WRITE(nuc900_audio->mmio + ACTL_CON, val);
-}
-
-static void nuc900_dma_stop(struct snd_pcm_substream *substream)
-{
-        struct snd_pcm_runtime *runtime = substream->runtime;
-        struct nuc900_audio *nuc900_audio = runtime->private_data;
-        unsigned long val;
-
-        val = AUDIO_READ(nuc900_audio->mmio + ACTL_CON);
-        val &= ~(T_DMA_IRQ | R_DMA_IRQ);
-        AUDIO_WRITE(nuc900_audio->mmio + ACTL_CON, val);
-}
-
 static irqreturn_t nuc900_dma_interrupt(int irq, void *dev_id)
 {
-        struct snd_pcm_substream *substream = dev_id;
-        struct nuc900_audio *nuc900_audio = substream->runtime->private_data;
+        struct nuc900_audio *nuc900_audio = dev_id;
         unsigned long val;
-
-        spin_lock(&nuc900_audio->lock);
+		unsigned long flags;
+		int stream;
+		        
+        spin_lock_irqsave(&nuc900_audio->irqlock, flags);
 
         val = AUDIO_READ(nuc900_audio->mmio + ACTL_CON);
-
         if (val & R_DMA_IRQ) {
-                AUDIO_WRITE(nuc900_audio->mmio + ACTL_CON, val | R_DMA_IRQ);
+    		stream = SNDRV_PCM_STREAM_CAPTURE;    		
+            AUDIO_WRITE(nuc900_audio->mmio + ACTL_CON, val | R_DMA_IRQ);
 
-                val = AUDIO_READ(nuc900_audio->mmio + ACTL_RSR);
+            val = AUDIO_READ(nuc900_audio->mmio + ACTL_RSR);
 
-                if (val & R_DMA_MIDDLE_IRQ) {
-                        val |= R_DMA_MIDDLE_IRQ;
-                        AUDIO_WRITE(nuc900_audio->mmio + ACTL_RSR, val);
-                }
+            if (val & R_DMA_MIDDLE_IRQ) {
+                    val |= R_DMA_MIDDLE_IRQ;
+                    AUDIO_WRITE(nuc900_audio->mmio + ACTL_RSR, val);
+            }
 
-                if (val & R_DMA_END_IRQ) {
-                        val |= R_DMA_END_IRQ;
-                        AUDIO_WRITE(nuc900_audio->mmio + ACTL_RSR, val);
-                }
+            if (val & R_DMA_END_IRQ) {
+                    val |= R_DMA_END_IRQ;
+                    AUDIO_WRITE(nuc900_audio->mmio + ACTL_RSR, val);
+            }
         } else if (val & T_DMA_IRQ) {
-                AUDIO_WRITE(nuc900_audio->mmio + ACTL_CON, val | T_DMA_IRQ);
+        	stream = SNDRV_PCM_STREAM_PLAYBACK;        	
+            AUDIO_WRITE(nuc900_audio->mmio + ACTL_CON, val | T_DMA_IRQ);
 
-                val = AUDIO_READ(nuc900_audio->mmio + ACTL_PSR);
+            val = AUDIO_READ(nuc900_audio->mmio + ACTL_PSR);
 
-                if (val & P_DMA_MIDDLE_IRQ) {
-                        val |= P_DMA_MIDDLE_IRQ;
-                        AUDIO_WRITE(nuc900_audio->mmio + ACTL_PSR, val);
-                }
+            if (val & P_DMA_MIDDLE_IRQ) {
+                    val |= P_DMA_MIDDLE_IRQ;
+                    AUDIO_WRITE(nuc900_audio->mmio + ACTL_PSR, val);
+            }
 
-                if (val & P_DMA_END_IRQ) {
-                        val |= P_DMA_END_IRQ;
-                        AUDIO_WRITE(nuc900_audio->mmio + ACTL_PSR, val);
-                }
+            if (val & P_DMA_END_IRQ) {
+                    val |= P_DMA_END_IRQ;
+                    AUDIO_WRITE(nuc900_audio->mmio + ACTL_PSR, val);
+            }               
         } else {
-                dev_err(nuc900_audio->dev, "Wrong DMA interrupt status!\n");
-                spin_unlock(&nuc900_audio->lock);
+                dev_err(nuc900_audio->dev, "Wrong DMA interrupt status!\n");                
+                spin_unlock_irqrestore(&nuc900_audio->irqlock, flags);
                 return IRQ_HANDLED;
         }
+        
+        spin_unlock_irqrestore(&nuc900_audio->irqlock, flags);
 
-        spin_unlock(&nuc900_audio->lock);
-
-        snd_pcm_period_elapsed(substream);
+        snd_pcm_period_elapsed(nuc900_audio->substream[stream]);
 
         return IRQ_HANDLED;
 }
@@ -167,7 +147,7 @@ static int nuc900_dma_hw_free(struct snd_pcm_substream *substream)
         struct nuc900_audio *nuc900_audio = runtime->private_data;
 
         snd_pcm_lib_free_pages(substream);
-        nuc900_audio->substream = NULL;
+        nuc900_audio->substream[substream->stream] = NULL;
 
         return 0;
 }
@@ -178,7 +158,7 @@ static int nuc900_dma_prepare(struct snd_pcm_substream *substream)
         struct nuc900_audio *nuc900_audio = runtime->private_data;
         unsigned long flags, val;
 
-        spin_lock_irqsave(&nuc900_audio->lock, flags);
+        spin_lock_irqsave(&nuc900_audio->irqlock, flags);
 
         nuc900_update_dma_register(substream,
                                    nuc900_audio->dma_addr[substream->stream],
@@ -190,15 +170,16 @@ static int nuc900_dma_prepare(struct snd_pcm_substream *substream)
         case 1:
                 if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
                         val &= ~(PLAY_LEFT_CHANNEL | PLAY_RIGHT_CHANNEL);
-                        val |= PLAY_RIGHT_CHANNEL;
+                        val |= PLAY_RIGHT_CHANNEL;                        
                 } else {
                         //NOTE:
                         //if record source device (mic) is connected at left channel,
                         //user needs to modify the following flag(RECORD_RIGHT_CHANNEL -> RECORD_LEFT_CHANNEL)
                         val &= ~(RECORD_LEFT_CHANNEL | RECORD_RIGHT_CHANNEL);
-                        val |= RECORD_RIGHT_CHANNEL;
+                        //val |= RECORD_RIGHT_CHANNEL;
+                        val |= RECORD_LEFT_CHANNEL;                        
                 }
-                AUDIO_WRITE(nuc900_audio->mmio + ACTL_RESET, val);
+                AUDIO_WRITE(nuc900_audio->mmio + ACTL_RESET, val);                
                 break;
         case 2:
                 if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
@@ -210,33 +191,10 @@ static int nuc900_dma_prepare(struct snd_pcm_substream *substream)
         default:
                 return -EINVAL;
         }
-        spin_unlock_irqrestore(&nuc900_audio->lock, flags);
+        spin_unlock_irqrestore(&nuc900_audio->irqlock, flags);
 
         return 0;
 }
-
-static int nuc900_dma_trigger(struct snd_pcm_substream *substream, int cmd)
-{
-        int ret = 0;
-
-        switch (cmd) {
-        case SNDRV_PCM_TRIGGER_START:
-        case SNDRV_PCM_TRIGGER_RESUME:
-                nuc900_dma_start(substream);
-                break;
-
-        case SNDRV_PCM_TRIGGER_STOP:
-        case SNDRV_PCM_TRIGGER_SUSPEND:
-                nuc900_dma_stop(substream);
-                break;
-
-        default:
-                ret = -EINVAL;
-                break;
-        }
-
-        return ret;
-};
 
 int nuc900_dma_getposition(struct snd_pcm_substream *substream,
                            dma_addr_t *src, dma_addr_t *dst)
@@ -258,7 +216,11 @@ static snd_pcm_uframes_t nuc900_dma_pointer(struct snd_pcm_substream *substream)
         struct snd_pcm_runtime *runtime = substream->runtime;
         dma_addr_t src, dst;
         unsigned long res;
-
+        struct nuc900_audio *nuc900_audio = runtime->private_data;
+        snd_pcm_uframes_t frames;
+		
+		spin_lock(&nuc900_audio->lock);
+		
         nuc900_dma_getposition(substream, &src, &dst);
 
         if (substream->stream == SNDRV_PCM_STREAM_CAPTURE)
@@ -266,7 +228,11 @@ static snd_pcm_uframes_t nuc900_dma_pointer(struct snd_pcm_substream *substream)
         else
                 res = src - runtime->dma_addr;
 
-        return bytes_to_frames(substream->runtime, res);
+        frames = bytes_to_frames(substream->runtime, res);
+        
+        spin_unlock(&nuc900_audio->lock);
+        
+        return frames;
 }
 
 static int nuc900_dma_open(struct snd_pcm_substream *substream)
@@ -283,25 +249,34 @@ static int nuc900_dma_open(struct snd_pcm_substream *substream)
 #ifdef CONFIG_SND_SOC_NUC900EVB_I2S
         nuc900_audio = nuc900_i2s_data;
 #endif
-
-        if (request_irq(nuc900_audio->irq_num, nuc900_dma_interrupt,
-                        IRQF_DISABLED, "nuc900-dma", substream))
-                return -EBUSY;
-
-        runtime->private_data = nuc900_audio;
-
+        runtime->private_data = nuc900_audio;              
+		
         return 0;
 }
 
 static int nuc900_dma_close(struct snd_pcm_substream *substream)
 {
-        struct snd_pcm_runtime *runtime = substream->runtime;
-        struct nuc900_audio *nuc900_audio = runtime->private_data;
-
-        free_irq(nuc900_audio->irq_num, substream);
-
         return 0;
 }
+
+int nuc900_dma_create(struct nuc900_audio *nuc900_audio)
+{
+	int ret = request_irq(nuc900_audio->irq_num, nuc900_dma_interrupt, IRQF_DISABLED, "nuc900-dma", nuc900_audio);
+    
+    if(ret)          
+    	return -EBUSY;
+    
+    return ret;
+}
+EXPORT_SYMBOL_GPL(nuc900_dma_create);
+
+int nuc900_dma_destroy(struct nuc900_audio *nuc900_audio)
+{
+	 free_irq(nuc900_audio->irq_num, nuc900_audio);
+	 
+	 return 0;    
+}
+EXPORT_SYMBOL_GPL(nuc900_dma_destroy);
 
 static int nuc900_dma_mmap(struct snd_pcm_substream *substream,
                            struct vm_area_struct *vma)
@@ -321,7 +296,6 @@ static struct snd_pcm_ops nuc900_dma_ops = {
         .hw_params	= nuc900_dma_hw_params,
         .hw_free	= nuc900_dma_hw_free,
         .prepare	= nuc900_dma_prepare,
-        .trigger	= nuc900_dma_trigger,
         .pointer	= nuc900_dma_pointer,
         .mmap		= nuc900_dma_mmap,
 };

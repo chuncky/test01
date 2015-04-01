@@ -324,6 +324,15 @@ config RTC_DRV_RX8025
 	  This driver can also be built as a module. If so, the module
 	  will be called rtc-rx8025.
 
+config RTC_DRV_HT1382
+        tristate "Holtek HT1382"
+        help
+          If you say yes here you get support for the
+          Holtek HT1382 RTC chip.
+
+          This driver can also be built as a module. If so, the module
+          will be called rtc-ht1382.
+
 endif # I2C
 
 comment "SPI RTC drivers"
@@ -619,11 +628,11 @@ config RTC_DRV_AB8500
 	  support. This chip contains a battery- and capacitor-backed RTC.
 
 config RTC_DRV_NUC900
-	tristate "NUC910/NUC920 RTC driver"
+	tristate "NUC910/NUC920/NUC951 RTC driver"
 	depends on RTC_CLASS && ARCH_W90X900
 	help
 	  If you say yes here you get support for the RTC subsystem of the
-	  NUC910/NUC920 used in embedded systems.
+	  NUC910/NUC920/NUC951 used in embedded systems.
 
 comment "on-CPU RTC drivers"
 
@@ -904,5 +913,6 @@ config RTC_DRV_MPC5121
 
 	  This driver can also be built as a module. If so, the module
 	  will be called rtc-mpc5121.
+
 
 endif # RTC_CLASS

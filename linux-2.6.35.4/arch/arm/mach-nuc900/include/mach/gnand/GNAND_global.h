@@ -28,7 +28,7 @@
 /* global string define */
 #define P2LN_INFO_MAGIC		"GNAND"
 #define P2LN_INFO_VERSION	"V1.01"
-#define P2LN_INFO_DATE		"20100428_1"
+#define P2LN_INFO_DATE		"20110420_1"
 
 
 #define P2LN_INFO_T		struct p2ln_info_t

@@ -125,7 +125,7 @@ static void nuc900_sd_reset_host(struct nuc900_sd_host *host)
 
         nuc900_sd_write(REG_DMACCSR, DMACCSR_DMACEN | DMACCSR_SW_RST); //enable DMAC for FMI
         nuc900_sd_write(REG_FMICSR, FMICSR_SW_RST);	/* Enable SD functionality of FMI */
-
+        nuc900_sd_write(REG_FMICSR, FMICSR_SD_EN);
         local_irq_restore(flags);
 }
 
@@ -264,9 +264,9 @@ static void nuc900_sd_handle_transmitted(struct nuc900_sd_host *host)
 
         /* check read/busy */
         if (host->port == 0)
-                nuc900_sd_write(REG_SDCSR, SDCSR_CLK_KEEP0);
+		nuc900_sd_write(REG_SDCSR, nuc900_sd_read(REG_SDCSR) | SDCSR_CLK_KEEP0);
         else
-                nuc900_sd_write(REG_SDCSR, SDCSR_CLK_KEEP1);
+                nuc900_sd_write(REG_SDCSR, nuc900_sd_read(REG_SDCSR) |SDCSR_CLK_KEEP1);
 }
 
 
@@ -339,22 +339,23 @@ static void nuc900_sd_disable(struct nuc900_sd_host *host)
 static void nuc900_sd_send_command(struct nuc900_sd_host *host, struct mmc_command *cmd)
 {
         unsigned int csr;
-        unsigned int block_length;
+        unsigned int volatile block_length;
         struct mmc_data *data = cmd->data;
 
-        unsigned int blocks;
+        unsigned int volatile blocks;
 
         host->cmd = cmd;
         sd_host = host;
         sd_state = 0;
         sd_state_xfer = 0;
 
-        if (!(host->flags & FL_SENT_STOP)) {
+//        if (!(host->flags & FL_SENT_STOP)) {
                 if (down_interruptible(&fmi_sem))
                         return;
-        }
+//        }
 
-	nuc900_sd_write(REG_FMICSR, FMICSR_SD_EN);
+        if(nuc900_sd_read(REG_FMICSR) != FMICSR_SD_EN)
+	        nuc900_sd_write(REG_FMICSR, FMICSR_SD_EN);
 
         if (host->port == 0)
                 csr = ((nuc900_sd_read(REG_SDCSR) | 0x01010000) & 0xff00c080);
@@ -380,7 +381,7 @@ static void nuc900_sd_send_command(struct nuc900_sd_host *host, struct mmc_comma
                 }
                 nuc900_sd_write(REG_SDISR, SDISR_RITO_IF);
                 sd_ri_timeout = 0;
-                nuc900_sd_write(REG_SDTMOUT, 0xffff);
+                nuc900_sd_write(REG_SDTMOUT, 0x8ffff);
         }
 
         if (data) {
@@ -403,8 +404,8 @@ static void nuc900_sd_send_command(struct nuc900_sd_host *host, struct mmc_comma
         /*
          * Set the arguments and send the command
          */
-        //nuc900_sd_debug("Sending command %d as 0x%0X, arg = 0x%08X, blocks = %d, length = %d\n",
-        //	cmd->opcode, csr, cmd->arg, blocks, block_length);
+//        nuc900_sd_debug("Sending command %d as 0x%0X, arg = 0x%08X, blocks = %d, length = %d\n",
+//        	cmd->opcode, csr, cmd->arg, blocks, block_length);
 
         if (data) {
 
@@ -436,16 +437,15 @@ static void nuc900_sd_send_command(struct nuc900_sd_host *host, struct mmc_comma
          * Send the command and then enable the PDC - not the other way round as
          * the data sheet says
          */
-
         nuc900_sd_write(REG_SDARG, cmd->arg);
         nuc900_sd_write(REG_SDCSR, csr);
         sd_send_cmd = 1;
         wake_up_interruptible(&sd_event_wq);
 
-        if (!(host->flags & FL_SENT_STOP)) {
+//        if (!(host->flags & FL_SENT_STOP)) {
                 wait_event_interruptible(sd_wq, (sd_state != 0));
                 up(&fmi_sem);
-        }
+//        }
 
         if (data) {
                 if (data->flags & MMC_DATA_WRITE) {
@@ -468,17 +468,79 @@ static void nuc900_sd_send_command(struct nuc900_sd_host *host, struct mmc_comma
 }
 
 /*
+ * Send stop command
+ */
+static void nuc900_sd_send_stop(struct nuc900_sd_host *host, struct mmc_command *cmd)
+{
+        unsigned int csr;
+        unsigned int volatile block_length;
+        struct mmc_data *data = cmd->data;
+
+        unsigned int volatile blocks;
+
+        host->cmd = cmd;
+        sd_host = host;
+        sd_state = 0;
+        sd_state_xfer = 0;
+
+        if(nuc900_sd_read(REG_FMICSR) != FMICSR_SD_EN)
+	        nuc900_sd_write(REG_FMICSR, FMICSR_SD_EN);
+
+        if (host->port == 0)
+                csr = ((nuc900_sd_read(REG_SDCSR) | 0x01010000) & 0xff00c080);
+        else
+                csr = ((nuc900_sd_read(REG_SDCSR) | 0x41010000) & 0xff00c080);
+
+        csr = csr | (cmd->opcode << 8) | SDCSR_CO_EN;	// set command code and enable command out
+        sd_event |= SD_EVENT_CMD_OUT;
+
+        if (host->bus_mode == MMC_BUS_WIDTH_4)
+                csr |= SDCSR_DBW;
+
+        if (mmc_resp_type(cmd) != MMC_RSP_NONE) {
+                /* if a response is expected then allow maximum response latancy */
+
+                /* set 136 bit response for R2, 48 bit response otherwise */
+                if (mmc_resp_type(cmd) == MMC_RSP_R2) {
+                        csr |= SDCSR_R2_EN;
+                        sd_event |= SD_EVENT_RSP2_IN;
+                } else {
+                        csr |= SDCSR_RI_EN;
+                        sd_event |= SD_EVENT_RSP_IN;
+                }
+                nuc900_sd_write(REG_SDISR, SDISR_RITO_IF);
+                sd_ri_timeout = 0;
+                nuc900_sd_write(REG_SDTMOUT, 0xffff);
+        }
+
+        block_length = 0;
+        blocks = 0;
+
+        /*
+         * Set the arguments and send the command
+         */
+        nuc900_sd_write(REG_SDARG, cmd->arg);
+        nuc900_sd_write(REG_SDCSR, csr);
+        sd_send_cmd = 1;
+        wake_up_interruptible(&sd_event_wq);
+
+        mmc_request_done(host->mmc, host->request);
+}
+
+
+
+/*
  * Process the request
  */
 static void nuc900_sd_send_request(struct nuc900_sd_host *host)
 {
-
         if (!(host->flags & FL_SENT_COMMAND)) {
                 host->flags |= FL_SENT_COMMAND;
                 nuc900_sd_send_command(host, host->request->cmd);
         } else if ((!(host->flags & FL_SENT_STOP)) && host->request->stop) {
                 host->flags |= FL_SENT_STOP;
-                nuc900_sd_send_command(host, host->request->stop);
+//                nuc900_sd_send_command(host, host->request->stop);
+                nuc900_sd_send_stop(host, host->request->stop);
         } else {
                 sd_state = 1;
                 wake_up_interruptible(&sd_wq);
@@ -557,6 +619,11 @@ static int nuc900_sd_card_detect(struct mmc_host *mmc)
         struct nuc900_sd_host *host = mmc_priv(mmc);
         int ret;
 
+        if (down_interruptible(&fmi_sem))
+                return -1;
+                
+        if(nuc900_sd_read(REG_FMICSR) != FMICSR_SD_EN)        
+           nuc900_sd_write(REG_FMICSR, FMICSR_SD_EN);        
         if (host->port == 0)
                 // SD port 0
                 host->present = nuc900_sd_read(REG_SDISR) & SDISR_CDPS0;
@@ -565,6 +632,7 @@ static int nuc900_sd_card_detect(struct mmc_host *mmc)
                 host->present = nuc900_sd_read(REG_SDISR) & SDISR_CDPS1;
 
         ret = host->present ? 0 : 1;
+        up(&fmi_sem);	
         return ret;
 }
 
@@ -726,8 +794,6 @@ static irqreturn_t nuc900_sd_irq(int irq, void *devid)
         unsigned int int_status, present;
 
         int_status = nuc900_sd_read(REG_SDISR);
-
-        //nuc900_sd_debug("FMI irq: status = %08X\n", int_status);
 
         if (int_status & SDISR_BLKD_IF) {
                 //nuc900_sd_debug("Block transfer has ended\n");

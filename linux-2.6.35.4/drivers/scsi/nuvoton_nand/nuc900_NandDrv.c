@@ -164,10 +164,10 @@ int fmiSM_ReadID(FMI_SM_INFO_T *pSM, NDISK_T *NDISK_info)
                 pSM->bIs2KPageSize = 0;
 
                 NDISK_info->NAND_type = NAND_TYPE_SLC;
-                NDISK_info->nZone = 8;				/* number of zones */
-                NDISK_info->nBlockPerZone = 1024;	/* blocks per zone */
-                NDISK_info->nPagePerBlock = 32;		/* pages per block */
-                NDISK_info->nLBPerZone = 1000;		/* logical blocks per zone */
+		NDISK_info->nZone = 1;				/* number of zones */
+		NDISK_info->nBlockPerZone = 8192;	/* blocks per zone */
+		NDISK_info->nPagePerBlock = 32;		/* pages per block */
+		NDISK_info->nLBPerZone = 8000;		/* logical blocks per zone */
                 NDISK_info->nPageSize = 512;
                 break;
 
@@ -180,10 +180,10 @@ int fmiSM_ReadID(FMI_SM_INFO_T *pSM, NDISK_T *NDISK_info)
                 pSM->bIs2KPageSize = 0;
 
                 NDISK_info->NAND_type = NAND_TYPE_SLC;
-                NDISK_info->nZone = 4;				/* number of zones */
-                NDISK_info->nBlockPerZone = 1024;	/* blocks per zone */
-                NDISK_info->nPagePerBlock = 32;		/* pages per block */
-                NDISK_info->nLBPerZone = 1000;		/* logical blocks per zone */
+		NDISK_info->nZone = 1;				/* number of zones */
+		NDISK_info->nBlockPerZone = 4096;	/* blocks per zone */
+		NDISK_info->nPagePerBlock = 32;		/* pages per block */
+		NDISK_info->nLBPerZone = 4000;		/* logical blocks per zone */
                 NDISK_info->nPageSize = 512;
                 break;
 
@@ -196,12 +196,11 @@ int fmiSM_ReadID(FMI_SM_INFO_T *pSM, NDISK_T *NDISK_info)
                 pSM->bIs2KPageSize = 0;
 
                 NDISK_info->NAND_type = NAND_TYPE_SLC;
-                NDISK_info->nZone = 2;				/* number of zones */
-                NDISK_info->nBlockPerZone = 1024;	/* blocks per zone */
-                NDISK_info->nPagePerBlock = 32;		/* pages per block */
-                NDISK_info->nLBPerZone = 1000;		/* logical blocks per zone */
+		NDISK_info->nZone = 1;				/* number of zones */
+		NDISK_info->nBlockPerZone = 2048;	/* blocks per zone */
+		NDISK_info->nPagePerBlock = 32;		/* pages per block */
+		NDISK_info->nLBPerZone = 2000;		/* logical blocks per zone */
                 NDISK_info->nPageSize = 512;
-                //printk("NAND Capatity : 32M  SectorSize : 512byte  TotalSector : 63936 \n");
                 break;
 
         case 0x73:	// 16M
@@ -244,8 +243,10 @@ int fmiSM_ReadID(FMI_SM_INFO_T *pSM, NDISK_T *NDISK_info)
                         pSM->uSectorPerBlock = 256;
 
                         NDISK_info->NAND_type = NAND_TYPE_SLC;
-                        NDISK_info->nZone = 2;				/* number of zones */
-                        NDISK_info->nPagePerBlock = 64;		/* pages per block */
+			NDISK_info->nZone = 1;				/* number of zones */
+			NDISK_info->nPagePerBlock = 64;		/* pages per block */
+			NDISK_info->nBlockPerZone = 2048;	/* blocks per zone */
+			NDISK_info->nLBPerZone = 2000;		/* logical blocks per zone */
                 } else if ((tempID[3] & 0x33) == 0x21) {
                         pSM->uBlockPerFlash = 1023;
                         pSM->uPagePerBlock = 128;
@@ -253,15 +254,15 @@ int fmiSM_ReadID(FMI_SM_INFO_T *pSM, NDISK_T *NDISK_info)
                         pSM->bIsMLCNand = 1;
 
                         NDISK_info->NAND_type = NAND_TYPE_MLC;
-                        NDISK_info->nZone = 1;				/* number of zones */
-                        NDISK_info->nPagePerBlock = 128;	/* pages per block */
+			NDISK_info->nZone = 1;				/* number of zones */
+			NDISK_info->nPagePerBlock = 128;	/* pages per block */
+			NDISK_info->nBlockPerZone = 1024;	/* blocks per zone */
+			NDISK_info->nLBPerZone = 1000;		/* logical blocks per zone */
                 }
                 pSM->uSectorPerFlash = 511488;
                 pSM->bIsMulticycle = 1;
                 pSM->bIs2KPageSize = 1;
 
-                NDISK_info->nBlockPerZone = 1024;	/* blocks per zone */
-                NDISK_info->nLBPerZone = 1000;		/* logical blocks per zone */
                 NDISK_info->nPageSize = 2048;
                 break;
 
@@ -272,8 +273,10 @@ int fmiSM_ReadID(FMI_SM_INFO_T *pSM, NDISK_T *NDISK_info)
                         pSM->uSectorPerBlock = 256;
 
                         NDISK_info->NAND_type = NAND_TYPE_SLC;
-                        NDISK_info->nZone = 4;				/* number of zones */
-                        NDISK_info->nPagePerBlock = 64;		/* pages per block */
+			NDISK_info->nZone = 1;				/* number of zones */
+			NDISK_info->nPagePerBlock = 64;		/* pages per block */
+			NDISK_info->nBlockPerZone = 4096;	/* blocks per zone */
+			NDISK_info->nLBPerZone = 4000;		/* logical blocks per zone */
                 } else if ((tempID[3] & 0x33) == 0x21) {
                         pSM->uBlockPerFlash = 2047;
                         pSM->uPagePerBlock = 128;
@@ -281,15 +284,15 @@ int fmiSM_ReadID(FMI_SM_INFO_T *pSM, NDISK_T *NDISK_info)
                         pSM->bIsMLCNand = 1;
 
                         NDISK_info->NAND_type = NAND_TYPE_MLC;
-                        NDISK_info->nZone = 2;				/* number of zones */
-                        NDISK_info->nPagePerBlock = 128;	/* pages per block */
+			NDISK_info->nZone = 1;				/* number of zones */
+			NDISK_info->nPagePerBlock = 128;	/* pages per block */
+			NDISK_info->nBlockPerZone = 2048;	/* blocks per zone */
+			NDISK_info->nLBPerZone = 2000;		/* logical blocks per zone */
                 }
                 pSM->uSectorPerFlash = 1022976;
                 pSM->bIsMulticycle = 1;
                 pSM->bIs2KPageSize = 1;
 
-                NDISK_info->nBlockPerZone = 1024;	/* blocks per zone */
-                NDISK_info->nLBPerZone = 1000;		/* logical blocks per zone */
                 NDISK_info->nPageSize = 2048;
                 break;
 
@@ -300,8 +303,10 @@ int fmiSM_ReadID(FMI_SM_INFO_T *pSM, NDISK_T *NDISK_info)
                         pSM->uSectorPerBlock = 256;
 
                         NDISK_info->NAND_type = NAND_TYPE_SLC;
-                        NDISK_info->nZone = 8;				/* number of zones */
-                        NDISK_info->nPagePerBlock = 64;		/* pages per block */
+			NDISK_info->nZone = 1;				/* number of zones */
+			NDISK_info->nPagePerBlock = 64;		/* pages per block */
+			NDISK_info->nBlockPerZone = 8192;	/* blocks per zone */
+			NDISK_info->nLBPerZone = 8000;		/* logical blocks per zone */
                 } else if ((tempID[3] & 0x33) == 0x21) {
                         pSM->uBlockPerFlash = 4095;
                         pSM->uPagePerBlock = 128;
@@ -309,15 +314,15 @@ int fmiSM_ReadID(FMI_SM_INFO_T *pSM, NDISK_T *NDISK_info)
                         pSM->bIsMLCNand = 1;
 
                         NDISK_info->NAND_type = NAND_TYPE_MLC;
-                        NDISK_info->nZone = 4;				/* number of zones */
-                        NDISK_info->nPagePerBlock = 128;	/* pages per block */
+			NDISK_info->nZone = 1;				/* number of zones */
+			NDISK_info->nPagePerBlock = 128;	/* pages per block */
+			NDISK_info->nBlockPerZone = 4096;	/* blocks per zone */
+			NDISK_info->nLBPerZone = 4000;		/* logical blocks per zone */
                 }
                 pSM->uSectorPerFlash = 2045952;
                 pSM->bIsMulticycle = 1;
                 pSM->bIs2KPageSize = 1;
 
-                NDISK_info->nBlockPerZone = 1024;	/* blocks per zone */
-                NDISK_info->nLBPerZone = 1000;		/* logical blocks per zone */
                 NDISK_info->nPageSize = 2048;
                 break;
 
@@ -328,8 +333,10 @@ int fmiSM_ReadID(FMI_SM_INFO_T *pSM, NDISK_T *NDISK_info)
                         pSM->uSectorPerBlock = 256;
 
                         NDISK_info->NAND_type = NAND_TYPE_SLC;
-                        NDISK_info->nZone = 16;				/* number of zones */
-                        NDISK_info->nPagePerBlock = 64;		/* pages per block */
+			NDISK_info->nZone = 1;				/* number of zones */
+			NDISK_info->nPagePerBlock = 64;		/* pages per block */
+			NDISK_info->nBlockPerZone = 16384;	/* blocks per zone */
+			NDISK_info->nLBPerZone = 16000;		/* logical blocks per zone */
                 } else if ((tempID[3] & 0x33) == 0x21) {
                         pSM->uBlockPerFlash = 8191;
                         pSM->uPagePerBlock = 128;
@@ -337,18 +344,18 @@ int fmiSM_ReadID(FMI_SM_INFO_T *pSM, NDISK_T *NDISK_info)
                         pSM->bIsMLCNand = 1;
 
                         NDISK_info->NAND_type = NAND_TYPE_MLC;
-                        NDISK_info->nZone = 8;				/* number of zones */
-                        NDISK_info->nPagePerBlock = 128;	/* pages per block */
+			NDISK_info->nZone = 1;				/* number of zones */
+			NDISK_info->nPagePerBlock = 128;	/* pages per block */
+			NDISK_info->nBlockPerZone = 8192;	/* blocks per zone */
+			NDISK_info->nLBPerZone = 8000;		/* logical blocks per zone */
                 }
                 pSM->uSectorPerFlash = 4091904;
                 pSM->bIsMulticycle = 1;
                 pSM->bIs2KPageSize = 1;
 
-                NDISK_info->nBlockPerZone = 1024;	/* blocks per zone */
-                NDISK_info->nLBPerZone = 1000;		/* logical blocks per zone */
                 NDISK_info->nPageSize = 2048;
 
-#if 1
+#if 0
                 if ((tempID[0] == 0xec) /*|| (tempID[0] == 0x98)*/) {
                         //printk("2 plane nand found\n");
                         gbIsSupport2PlaneNand = 1;
@@ -976,6 +983,9 @@ int fmiSM_Read_2K(FMI_SM_INFO_T *pSM, u32 uPage, u32 uDAddr)
 {
 //	printk("fmiSM_Read_2K uPage=%d   uDAddr=%x\n",uPage,uDAddr);
 
+        // enable SM
+        nuc900_nand_write(REG_FMICSR, 0x08);
+
         if (down_interruptible(&dmac_sem))
                 return(GNERR_IO_ERR);
 //printk("nand dma in - r\n");
@@ -1182,6 +1192,9 @@ int fmiSM_Read_2Plane_RA(FMI_SM_INFO_T *pSM, u32 uPage, u32 ucColAddr)
 
 int fmiSM_Write_2K(FMI_SM_INFO_T *pSM, u32 uSector, u32 ucColAddr, u32 uSAddr)
 {
+        // enable SM
+        nuc900_nand_write(REG_FMICSR, 0x08);
+
         if (down_interruptible(&dmac_sem))
                 return(GNERR_IO_ERR);
 //printk("nand dma in - w\n");
@@ -1465,6 +1478,7 @@ static int sicSMInit(int NandPort, NDISK_T *NDISK_info)
 {
 
         int status=0;
+	int count=0;
 
         if (down_interruptible(&fmi_sem))
                 return GNERR_IO_ERR;
@@ -1523,8 +1537,11 @@ static int sicSMInit(int NandPort, NDISK_T *NDISK_info)
 
         }
         up(&fmi_sem);
-        NDISK_info->nBlockPerZone = (NDISK_info->nBlockPerZone * NDISK_info->nZone - NDISK_info->nStartBlock) / NDISK_info->nZone;
-        NDISK_info->nLBPerZone = NDISK_info->nBlockPerZone - 20;
+
+	count = NDISK_info->nBlockPerZone * 2 / 100 + 10;
+	NDISK_info->nBlockPerZone = (NDISK_info->nBlockPerZone * NDISK_info->nZone - NDISK_info->nStartBlock) / NDISK_info->nZone;
+	NDISK_info->nLBPerZone = NDISK_info->nBlockPerZone - count;
+
 
         return 0;
 }

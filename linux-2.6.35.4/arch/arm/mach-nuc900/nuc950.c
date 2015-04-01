@@ -33,6 +33,7 @@ static struct platform_device *nuc950_dev[] __initdata = {
 
 static struct map_desc nuc950evb_iodesc[] __initdata = {
         IODESC_ENT(I2C),
+	IODESC_ENT(EMC),
 };
 
 /*Init NUC950 evb io*/

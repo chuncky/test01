@@ -187,6 +187,8 @@ static void nuc900_ac97_cold_reset(struct snd_ac97 *ac97)
         val |= AC_C_RES;
         AUDIO_WRITE(nuc900_audio->mmio + ACTL_ACCON, val);
 
+		udelay(10);
+
         val = AUDIO_READ(nuc900_audio->mmio + ACTL_ACCON);
         val &= (~AC_C_RES);
         AUDIO_WRITE(nuc900_audio->mmio + ACTL_ACCON, val);
@@ -361,6 +363,10 @@ static int __devinit nuc900_ac97_drvprobe(struct platform_device *pdev)
                 goto out2;
         }
 
+	ret = nuc900_dma_create(nuc900_audio);
+	if (ret != 0)
+		return ret;
+
         nuc900_ac97_data = nuc900_audio;
 
         nuc900_audio->dev = nuc900_ac97_dai.dev =  &pdev->dev;
@@ -388,6 +394,7 @@ out0:
 static int __devexit nuc900_ac97_drvremove(struct platform_device *pdev)
 {
 
+	nuc900_dma_destroy(nuc900_ac97_data);
         snd_soc_unregister_dai(&nuc900_ac97_dai);
 
         clk_put(nuc900_ac97_data->clk);

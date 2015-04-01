@@ -154,4 +154,9 @@
 #define W90X900_PA_EMC		(0xB0003000)
 #define W90X900_SZ_EMC		SZ_4K
 
+/* PCI interface controller */
+#define W90X900_VA_PCI 	   W90X900_ADDR(0x00002000)
+#define W90X900_PA_PCI 	   (0xB0002000)
+#define W90X900_SZ_PCI 	   SZ_4K
+
 #endif /* __ASM_ARCH_MAP_H */

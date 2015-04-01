@@ -1154,6 +1154,7 @@ MODULE_LICENSE ("GPL");
 
 #ifdef CONFIG_USB_NUC900_EHCI
 #include "ehci-nuc900.c"
+#define        PLATFORM_DRIVER         ehci_hcd_nuc900_driver
 #endif
 
 #ifdef CONFIG_ARCH_AT91

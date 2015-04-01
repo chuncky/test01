@@ -21,4 +21,10 @@
 #include <asm/sizes.h>
 #include <mach/map.h>
 
+#define CONFIG_NO_MULTIWORD_IO
+//#define PCIMEM_BASE		0xC0000000
+#define PCIBIOS_MIN_IO          0xE0080000
+#define PCIBIOS_MIN_MEM         0xE0000000
+#define pcibios_assign_all_busses()     0
+
 #endif /* __ASM_ARCH_HARDWARE_H */

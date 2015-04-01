@@ -819,6 +819,64 @@ static int ehci_hub_control (
 			goto error;
 		wIndex--;
 		status = 0;
+
+#ifdef CONFIG_ARCH_W90X900  // Nuvoton, software debounce
+		if ((ehci_readl(ehci, status_reg) & 0x3) == 0x3)
+		{
+			volatile u32  i, loop;
+
+			printk("Do Nuvoton software debound...\n");
+			for (i = 0; i < 0x80000; i++)
+			{
+				if (!(ehci_readl(ehci, status_reg) & 0xc00))
+					break;
+			}
+			if (ehci_readl(ehci, status_reg) & 0xc00)
+				printk("  port = 0x%x\n", ehci_readl(ehci, status_reg));
+
+			if ((i >= 0x80000) &&
+				((ehci_readl(ehci, status_reg) & 0xc00) != 0x800) &&
+				((ehci_readl(ehci, status_reg) & 0xc00) != 0x400))
+			{
+				volatile u32  loop, physical_map_ohci;
+
+				printk("Not J-state, clear CSC - 0x%x\n", ehci_readl(ehci, status_reg));
+				ehci_writel(ehci, ehci_readl(ehci, status_reg), status_reg);
+
+				/*
+				 * Recover EHCI from connect state
+				 */
+				physical_map_ohci = ioremap(0xB0007000, 0x400);
+
+				//printk("\nDisable port power...\n");
+				__raw_writel(0x01, physical_map_ohci+0x50);
+				ehci_writel(ehci, 0x2, status_reg);
+				//for (loop = 0; loop < 0x10000; loop++);
+				//printk("     port%d = 0x%x\n", wIndex+1, ehci_readl(ehci, status_reg));
+
+				//printk("\nChange port owner to OHCI...\n");
+				ehci_writel(ehci, 0x2002, status_reg);
+				for (loop = 0; loop < 0x100000; loop++);
+				//printk("     port%d = 0x%x\n", wIndex+1, ehci_readl(ehci, status_reg));
+
+				//printk("\nChange port owner back to EHCI...\n");
+				ehci_writel(ehci, 0x2, status_reg);
+				for (loop = 0; loop < 0x10000; loop++);
+				//printk("     port%d = 0x%x\n", wIndex+1, ehci_readl(ehci, status_reg));
+
+				//printk("\nEnable port power...\n");
+				ehci_writel(ehci, 0x1002, status_reg);
+				__raw_writel(0x10000, physical_map_ohci+0x50);
+				for (loop = 0; loop < 0x10000; loop++);
+				//printk("     port%d = 0x%x\n", wIndex+1, ehci_readl(ehci, status_reg));
+				//iounmap(physical_map_ohci);
+				break;
+			}
+			printk("Debound OK - 0x%x\n", ehci_readl(ehci, status_reg));
+		}
+#endif
+
+
 		temp = ehci_readl(ehci, status_reg);
 
 		// wPortChange bits
@@ -895,10 +953,48 @@ static int ehci_hub_control (
 			 * this bit; seems too long to spin routinely...
 			 */
 			retval = handshake(ehci, status_reg,
-					PORT_RESET, 0, 1000);
+#ifdef CONFIG_ARCH_W90X900   // Nuvoton, longer waiting
+					 PORT_RESET, 0, 100000);
+#else
+					 PORT_RESET, 0, 1000);
+#endif
 			if (retval != 0) {
+				volatile int  i, loop;
 				ehci_err (ehci, "port %d reset error %d\n",
 					wIndex + 1, retval);
+
+#ifdef CONFIG_ARCH_W90X900 	// Nuvoton, recover from port reset halt state
+				if ((ehci_readl(ehci, status_reg) & 0x1) ||
+					((ehci_readl(ehci, status_reg) & 0x1900) == 0x1900))
+				{
+					volatile u32  loop, physical_map_ohci;
+
+					physical_map_ohci = ioremap(0xB0007000, 0x400);
+
+					//printk("\nDisable port power...\n");
+					ehci_writel(ehci, 0x0, status_reg);
+					__raw_writel(0x01, physical_map_ohci+0x50);
+					for (loop = 0; loop < 0x10000; loop++);
+					//printk("     port%d = 0x%x\n", wIndex+1, ehci_readl(ehci, status_reg));
+
+					//printk("\nChange port owner to OHCI...\n");
+					ehci_writel(ehci, 0x2002, status_reg);
+					for (loop = 0; loop < 0x100000; loop++);
+					//printk("     port%d = 0x%x\n", wIndex+1, ehci_readl(ehci, status_reg));
+
+					//printk("\nChange port owner back to EHCI...\n");
+					ehci_writel(ehci, 0x2, status_reg);
+					for (loop = 0; loop < 0x10000; loop++);
+					//printk("     port%d = 0x%x\n", wIndex+1, ehci_readl(ehci, status_reg));
+
+					//printk("\nEnable port power...\n");
+					ehci_writel(ehci, 0x1002, status_reg);
+					__raw_writel(0x10000, physical_map_ohci+0x50);
+					for (loop = 0; loop < 0x10000; loop++);
+					//printk("     port%d = 0x%x\n", wIndex+1, ehci_readl(ehci, status_reg));
+					iounmap(physical_map_ohci);
+				}
+#endif
 				goto error;
 			}
 
@@ -1023,6 +1119,37 @@ static int ehci_hub_control (
 			set_bit(wIndex, &ehci->suspended_ports);
 			break;
 		case USB_PORT_FEAT_POWER:
+#ifdef CONFIG_ARCH_W90X900 // Nuvoton, 2011.10.12
+			if ((ehci_readl(ehci, &ehci->regs->port_status[0]) == 0x800) ||
+				(ehci_readl(ehci, &ehci->regs->port_status[1]) == 0x800))
+			{
+				volatile int  loop;
+
+				printk("Power-on with port power VCC5, clear port J-state.\n");
+
+				if (ehci_readl(ehci, &ehci->regs->port_status[1]) == 0x800)
+				{
+					do {
+						ehci_writel(ehci, 0x2000, &ehci->regs->port_status[1]);
+						for (loop = 0; loop < 0x100000; loop++);  // cannot sleep here...
+						ehci_writel(ehci, 0x1000, &ehci->regs->port_status[1]);
+						for (loop = 0; loop < 0x100000; loop++);
+						//printk("status = 0x%x, 0x%x\n", ehci_readl(ehci, &ehci->regs->port_status[0]), ehci_readl(ehci, &ehci->regs->port_status[1]));
+					} while ((ehci_readl(ehci, &ehci->regs->port_status[1]) == 0x1800) || (ehci_readl(ehci, &ehci->regs->port_status[1]) == 0x1802));
+				}
+
+                                if (ehci_readl(ehci, &ehci->regs->port_status[0]) == 0x800)
+                                {
+                                        do {
+                                                ehci_writel(ehci, 0x2000, &ehci->regs->port_status[0]);
+                                                for (loop = 0; loop < 0x100000; loop++);
+                                                ehci_writel(ehci, 0x1000, &ehci->regs->port_status[0]);
+                                                for (loop = 0; loop < 0x100000; loop++);
+                                                //printk("status = 0x%x, 0x%x\n", ehci_readl(ehci, &ehci->regs->port_status[0]), ehci_readl(ehci, &ehci->regs->port_status[1]));
+                                        } while ((ehci_readl(ehci, &ehci->regs->port_status[0]) == 0x1800) || (ehci_readl(ehci, &ehci->regs->port_status[0]) == 0x1802));
+                                }
+			}
+#endif
 			if (HCS_PPC (ehci->hcs_params))
 				ehci_writel(ehci, temp | PORT_POWER,
 						status_reg);

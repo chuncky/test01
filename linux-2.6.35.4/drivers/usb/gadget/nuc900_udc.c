@@ -3,7 +3,7 @@
  *
  * Nuvoton NUC900 MCU on-chip full speed USB device controllers
  *
- * Copyright (C) 2010 Nuvoton Technology Corp
+ * Copyright (C) 2014 Nuvoton Technology Corp
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -130,7 +130,6 @@ static void start_write(struct nuc900_ep *ep, u8* buf,u32 length)
         u32 volatile reg;
 
         if (dev->usb_dma_trigger) {
-                printk("*** dma trigger ***\n");
                 return;
         }
 
@@ -147,7 +146,6 @@ static void start_write(struct nuc900_ep *ep, u8* buf,u32 length)
         if ((reg & 0x40) != 0x40)
                 __raw_writel((reg | 0x00000020), controller.reg + REG_USBD_DMA_CTRL_STS);
 
-//printk("start_write: togle %d\n", __raw_readl(controller.reg + REG_USBD_EPA_RSP_SC+0x28*(ep->index-1)));
         return ;
 }
 
@@ -156,7 +154,6 @@ static void start_read(struct nuc900_ep *ep, u8* buf, u32 length)
         struct nuc900_udc	*dev = ep->dev;
 
         if (dev->usb_dma_trigger) {
-                printk("*** dma trigger ***\n");
                 return;
         }
 
@@ -240,7 +237,6 @@ write_packet(struct nuc900_ep *ep, struct nuc900_request *req)
                 buf = (u8*)(req->req.dma + req->req.actual);
 
                 if (len == 0) {
-                        printk("write_packet send zero packet\n");
                         __raw_writel((__raw_readl(controller.reg + REG_USBD_EPA_RSP_SC+0x28*(ep->index-1))&0xF7)|EP_ZERO_IN,
                                      controller.reg + REG_USBD_EPA_RSP_SC+0x28*(ep->index-1));
                 } else {
@@ -333,7 +329,6 @@ static int read_fifo(struct nuc900_ep *ep, struct nuc900_request *req, u16 cnt)
         buf = req->req.buf + req->req.actual;
         bufferspace = req->req.length - req->req.actual;
         if (!bufferspace) {
-                printk("read_fifo: Buffer full !!\n");
                 return -1;
         }
 
@@ -345,7 +340,6 @@ static int read_fifo(struct nuc900_ep *ep, struct nuc900_request *req, u16 cnt)
                 done(ep, req, 0);
                 /* overflowed this request?  flush extra data */
                 if (req->req.length != req->req.actual) {
-                        printk("%s(): EOVERFLOW set\n", __FUNCTION__);
                         if (req->req.short_not_ok)
                                 req->req.status = -EOVERFLOW;	//device read less then host write
                 }
@@ -364,7 +358,6 @@ static void Get_SetupPacket(struct usb_ctrlrequest *pcrq, u32 temp)
         pcrq->wIndex = (u16)__raw_readl(controller.reg + REG_USBD_SETUP5_4);
         pcrq->wLength = (u16)__raw_readl(controller.reg + REG_USBD_SETUP7_6);
 
-        printk("setup:%x,%x,%x,%x\n", temp, pcrq->wValue, pcrq->wIndex, pcrq->wLength);
 }
 
 void paser_irq_stat(int irq, struct nuc900_udc *dev)
@@ -468,7 +461,6 @@ void paser_irq_cep(int irq, struct nuc900_udc *dev, u32 IrqSt)
                         dev->ep0state=EP0_IDLE;
 
                 if (dev->setup_ret < 0) { // == -EOPNOTSUPP)
-                        printk("CEP send zero pkt\n");
                         __raw_writel(CEP_ZEROLEN, controller.reg + REG_USBD_CEP_CTRL_STAT);
                         __raw_writel(0x400, controller.reg + REG_USBD_CEP_IRQ_ENB);		//enb sts completion int
                 }
@@ -534,21 +526,19 @@ void paser_irq_nep(int irq, struct nuc900_ep *ep, u32 IrqSt)
         u32 datacnt_reg;
 
         if (list_empty(&ep->queue)) {
-                printk("nep->queue is empty\n");
                 req = 0;
         } else {
                 __raw_writel(__raw_readl(controller.reg + REG_USBD_EPA_IRQ_STAT + 0x28*(ep->index-1)),
                              controller.reg + REG_USBD_EPA_IRQ_STAT + 0x28*(ep->index-1));
                 req = list_entry(ep->queue.next, struct nuc900_request, queue);
         }
-        //printk("paser_irq_nep:0x%x\n", (int)req->req.dma);
+
         switch (irq) {
         case EP_IN_TOK:
                 __raw_writel(irq, controller.reg + REG_USBD_EPA_IRQ_STAT + 0x28*(ep->index-1));
 
                 if (ep->EP_Type == EP_TYPE_BLK) {
                         if (__raw_readl(controller.reg + REG_USBD_EPA_RSP_SC+0x28*(ep->index-1))&0x40) { //send last packet
-                                printk("send last packet\n");
                                 break;
                         }
                 }
@@ -559,7 +549,6 @@ void paser_irq_nep(int irq, struct nuc900_ep *ep, u32 IrqSt)
 
                 while (__raw_readl(controller.reg + REG_USBD_DMA_CTRL_STS)&0x20);//wait DMA complete
                 if (dev->usb_dma_trigger) {
-                        printk("IN dma triggered\n");
                         while ((__raw_readl(controller.reg + REG_USBD_IRQ_STAT) & 0x20) == 0);
                         __raw_writel(0x20, controller.reg + REG_USBD_IRQ_STAT);
                         udc_isr_dma(dev);
@@ -572,18 +561,15 @@ void paser_irq_nep(int irq, struct nuc900_ep *ep, u32 IrqSt)
                 if (req) {
                         if (dev->usb_dma_trigger) {
                                 loop = __raw_readl(controller.reg + REG_USBD_EPA_DATA_CNT + 0x28*(ep->index-1))>>16;
-                                printk("loop=%d, %d\n", loop, dev->usb_dma_loop);
                                 loop = dev->usb_dma_loop - loop;
 
                                 if (loop)
                                         req->req.actual += loop*32;//each loop 32 bytes
-                                //printk("reset dma\n");
+
                                 dev->usb_dma_trigger = 0;
                                 //reset DMA
                                 __raw_writel(0x80, controller.reg + REG_USBD_DMA_CTRL_STS);
                                 __raw_writel(0x00, controller.reg + REG_USBD_DMA_CTRL_STS);
-
-                                //printk("after DMA reset DATA_CNT=%x, %x\n", __raw_readl(controller.reg + REG_USBD_EPA_DATA_CNT + 0x28*(ep->index-1)), dev->irq_enbl);
 
                                 __raw_writel(dev->irq_enbl, controller.reg + REG_USBD_IRQ_ENB_L);
                         }
@@ -595,14 +581,12 @@ void paser_irq_nep(int irq, struct nuc900_ep *ep, u32 IrqSt)
 
                         for (i=0; i<tmp; i++) {
                                 data = __raw_readl(controller.reg + REG_USBD_EPA_DATA_BUF + 0x28*(ep->index-1));
-                                //printk("%x ", data);
                                 *buf++ = data&0xFF;
                                 *buf++ = (data&0xFF00)>>8;
                         }
 
                         if ((fifo_count % 2) != 0) {
                                 data = __raw_readb(controller.reg + REG_USBD_EPA_DATA_BUF + 0x28*(ep->index-1));
-                                //printk("%x\n", data);
                                 *buf++ = data&0xFF;
                         }
 
@@ -637,7 +621,6 @@ void paser_irq_nep(int irq, struct nuc900_ep *ep, u32 IrqSt)
 
 
                 if (dev->usb_dma_trigger) {
-                        printk("RxED dma triggered\n");
                         while ((__raw_readl(controller.reg + REG_USBD_IRQ_STAT) & 0x20) == 0);
                         __raw_writel(0x02, controller.reg + REG_USBD_IRQ_STAT);
                         udc_isr_dma(dev);
@@ -647,7 +630,6 @@ void paser_irq_nep(int irq, struct nuc900_ep *ep, u32 IrqSt)
 
                 break;
         default:
-                printk("irq: %d not handled !\n",irq);
                 __raw_writel(irq, controller.reg + REG_USBD_EPA_IRQ_STAT + 0x28*(ep->index-1));
                 break;
 
@@ -664,7 +646,6 @@ void paser_irq_nepint(int irq, struct nuc900_ep *ep, u32 IrqSt)
         __raw_writel(irq, controller.reg + REG_USBD_EPA_IRQ_STAT + 0x28*(ep->index-1));
 
         if (list_empty(&ep->queue)) {
-                printk("nepirq->queue is empty\n");
                 req = 0;
                 return;
         } else {
@@ -676,7 +657,6 @@ void paser_irq_nepint(int irq, struct nuc900_ep *ep, u32 IrqSt)
 
                 while (__raw_readl(controller.reg + REG_USBD_DMA_CTRL_STS)&0x20);//wait DMA complete
                 if (dev->usb_dma_trigger) {
-                        printk("int IN dma triggered\n");
                         while ((__raw_readl(controller.reg + REG_USBD_IRQ_STAT) & 0x20) == 0);
                         __raw_writel(0x20, controller.reg + REG_USBD_IRQ_STAT);
                         udc_isr_dma(dev);
@@ -685,7 +665,6 @@ void paser_irq_nepint(int irq, struct nuc900_ep *ep, u32 IrqSt)
 
                 break;
         default:
-                printk("irq: %d not handled !\n",irq);
                 __raw_writel(irq, controller.reg + REG_USBD_EPA_IRQ_STAT + 0x28*(ep->index-1));
                 break;
 
@@ -713,7 +692,6 @@ static irqreturn_t nuc900_udc_irq(int irq, void *_dev)
 
         IrqStL = IrqStL & IrqEnL ;
         if (!IrqStL) {
-                printk("Not our interrupt !\n");
                 return IRQ_HANDLED;
         }
 
@@ -739,12 +717,10 @@ static irqreturn_t nuc900_udc_irq(int irq, void *_dev)
         if (IrqStL & IRQ_CEP) {
                 IrqSt = __raw_readl(controller.reg + REG_USBD_CEP_IRQ_STAT);
                 IrqEn = __raw_readl(controller.reg + REG_USBD_CEP_IRQ_ENB);
-                //printk("cep:%x, %x\n", IrqSt, IrqEn);
                 IrqSt = IrqSt & IrqEn ;
                 __raw_writel(IrqSt, controller.reg + REG_USBD_CEP_IRQ_STAT);
 
                 if (IrqSt && dev->driver) {
-                        //for(i=12;i>=0;i--)
                         if (IrqSt&CEP_STS_END) { //deal with STS END
                                 if (dev->ep0state == EP0_OUT_DATA_PHASE)
                                         IrqSt &= 0x1BF7;
@@ -942,9 +918,6 @@ static int nuc900_ep_enable (struct usb_ep *_ep, const struct usb_endpoint_descr
 
         /* print some debug message */
         tmp = desc->bEndpointAddress;
-        printk ("enable %s(%d) ep%x%s-blk max %02x\n",
-                _ep->name,ep->EP_Num, tmp, desc->bEndpointAddress & USB_DIR_IN ? "in" : "out", max);
-
         spin_unlock_irqrestore (&dev->lock, flags);
 
         return 0;
@@ -975,8 +948,6 @@ static int nuc900_ep_disable (struct usb_ep *_ep)
 
         spin_unlock_irqrestore(&ep->dev->lock, flags);
 
-        printk("%s disabled\n", _ep->name);
-
         return 0;
 }
 
@@ -987,8 +958,6 @@ static struct usb_request *
 nuc900_alloc_request (struct usb_ep *_ep, gfp_t mem_flags) {
         struct nuc900_ep	*ep;
         struct nuc900_request	*req;
-
-        //printk("nuc900_alloc_request(ep=%p,flags=%d) ", _ep, mem_flags);
 
         ep = container_of (_ep, struct nuc900_ep, ep);
         if (!_ep)
@@ -1001,7 +970,6 @@ nuc900_alloc_request (struct usb_ep *_ep, gfp_t mem_flags) {
         INIT_LIST_HEAD (&req->queue);
         req->req.dma = DMA_ADDR_INVALID;
 
-        //printk("req=0x%x, buf0x%x\n", (int)req, (int)req->req.buf);
         return &req->req;
 }
 
@@ -1013,8 +981,6 @@ nuc900_free_request (struct usb_ep *_ep, struct usb_request *_req)
 {
         struct nuc900_ep	*ep;
         struct nuc900_request	*req;
-
-        //printk("nuc900_free_request(ep=%p,req=%p)\n", _ep, _req);
 
         ep = container_of (_ep, struct nuc900_ep, ep);
         if (!ep || !_req || (!ep->desc && _ep->name != ep0name))
@@ -1046,18 +1012,13 @@ nuc900_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t gfp_flags)
 
         if (unlikely (!_req || !_req->complete || !_req->buf
                         || !list_empty(&req->queue))) {
-                if (!_req) {
-                        printk("nuc900_queue: 1 X X X\n");
-                } else {
-                        printk("nuc900_queue: 0 %01d %01d %01d\n",!_req->complete,!_req->buf, !list_empty(&req->queue));
-                }
+
                 local_irq_restore(flags);
                 return -EINVAL;
         }
 
         ep = container_of(_ep, struct nuc900_ep, ep);
         if (unlikely (!_ep || (!ep->desc && ep->ep.name != ep0name))) {
-                printk("nuc900_queue: inval 2\n");
                 local_irq_restore(flags);
                 return -EINVAL;
         }
@@ -1066,7 +1027,6 @@ nuc900_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t gfp_flags)
         if (unlikely (!dev->driver
                         || dev->gadget.speed == USB_SPEED_UNKNOWN)) {
                 local_irq_restore(flags);
-                printk("nuc900_queue: speed =%d\n",dev->gadget.speed);
                 return -ESHUTDOWN;
         }
 
@@ -1093,7 +1053,6 @@ nuc900_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t gfp_flags)
         if (ep->index==0) { //delayed status
                 if (dev->setup_ret > 1000||
                                 ((req->req.length==0)&&(dev->ep0state == EP0_OUT_DATA_PHASE))) {
-                        printk("delayed status done\n");
                         __raw_writel(CEP_NAK_CLEAR, controller.reg + REG_USBD_CEP_CTRL_STAT);	// clear nak so that sts stage is complete
                         __raw_writel(0x402, controller.reg + REG_USBD_CEP_IRQ_ENB);		// suppkt int//enb sts completion int
                         done(ep, req, 0);
@@ -1125,8 +1084,6 @@ static int nuc900_dequeue (struct usb_ep *_ep, struct usb_request *_req)
         unsigned long		flags;
         struct nuc900_request	*req;
 
-        printk("nuc900_dequeue(ep=%p,req=%p)\n", _ep, _req);
-
         if (!udc->driver)
                 return -ESHUTDOWN;
 
@@ -1145,11 +1102,8 @@ static int nuc900_dequeue (struct usb_ep *_ep, struct usb_request *_req)
                 }
         }
         spin_unlock_irqrestore (&udc->lock, flags);
-        printk("dequeue: %d, req %p\n", retval,  &req->req);
-        if (retval == 0) {
-                printk( "dequeued req %p from %s, len %d buf %p\n",
-                        req, _ep->name, _req->length, _req->buf);
 
+        if (retval == 0) {
                 _req->complete (_ep, _req);
                 done(ep, req, -ECONNRESET);
         }
@@ -1163,7 +1117,6 @@ static int nuc900_dequeue (struct usb_ep *_ep, struct usb_request *_req)
  */
 static int nuc900_set_halt (struct usb_ep *_ep, int value)
 {
-        printk("set halt\n");
         return 0;
 }
 
@@ -1234,9 +1187,6 @@ int usb_gadget_register_driver (struct usb_gadget_driver *driver)
         struct nuc900_udc *udc = &controller;
         int retval;
 
-
-        printk("usb_gadget_register_driver() '%s'\n", driver->driver.name);
-
         if (!udc)
                 return -ENODEV;
 
@@ -1245,7 +1195,6 @@ int usb_gadget_register_driver (struct usb_gadget_driver *driver)
         if (!driver->bind || !driver->unbind || !driver->setup
                         || driver->speed == USB_SPEED_UNKNOWN)
                 return -EINVAL;
-        printk("driver->speed=%d\n", driver->speed);
         udc->gadget.name = gadget_name;
         udc->gadget.ops = &nuc900_ops;
         udc->gadget.is_dualspeed = 1;
@@ -1254,61 +1203,16 @@ int usb_gadget_register_driver (struct usb_gadget_driver *driver)
 
         udc->gadget.dev.release = nop_release;
 
-#if 0
-        //printk("aaa %x\n", (int)controller.reg);
-        INIT_LIST_HEAD (&udc->gadget.ep_list);
-        for (i = 0; i < NUC900_ENDPOINTS; i++) {
-                struct nuc900_ep *ep = &udc->ep[i];
-
-                //printk("ep %d\n", i);
-                if (!ep_name[i])
-                        break;
-                ep->index = i;
-                ep->ep.name = ep_name[i];
-                ep->ep.ops = &nuc900_ep_ops;
-                list_add_tail (&ep->ep.ep_list, &udc->gadget.ep_list);
-
-                /* maxpacket differs between ep0 and others ep */
-                if (!i) {
-                        ep->EP_Num = 0;
-                        ep->ep.maxpacket = EP0_FIFO_SIZE;
-                        __raw_writel(0x00000000, controller.reg + REG_USBD_CEP_START_ADDR);
-                        __raw_writel(0x0000003f, controller.reg + REG_USBD_CEP_END_ADDR);
-                } else {
-                        ep->ep.maxpacket = EP_FIFO_SIZE;
-                        //sram_addr = udc->ep[0].ep.maxpacket + EP_FIFO_SIZE * (i - 1);
-                        //printk("sram_addr=%x\n", sram_addr);
-                        __raw_writel(0, controller.reg + REG_USBD_EPA_START_ADDR+0x28*(ep->index-1));
-                        __raw_writel(0, controller.reg + REG_USBD_EPA_END_ADDR+0x28*(ep->index-1));
-                }
-                ep->gadget = &udc->gadget;
-                ep->dev = udc;
-                ep->desc = 0;
-                INIT_LIST_HEAD (&ep->queue);
-        }
-
-        udc->gadget.ep0 = &udc->ep[0].ep;
-        list_del_init (&udc->ep[0].ep.ep_list);
-#endif
-
         udc->driver = driver;
 
         udc->gadget.dev.driver = &driver->driver;
 
-        printk( "binding gadget driver '%s'\n", driver->driver.name);
         if ((retval = driver->bind (&udc->gadget)) != 0) {
-                printk("bind fail\n");
                 udc->driver = 0;
                 udc->gadget.dev.driver = 0;
                 return retval;
         }
-        printk( "after driver bind:%p\n" , driver->bind);
 
-#if 0
-        driver->driver.bus = udc->gadget.dev.parent->bus;
-        driver_register (&driver->driver);
-        device_bind_driver (&udc->gadget.dev);
-#endif
 
         mdelay(300);
         __raw_writel(__raw_readl(REG_PWRON) | 0x400, REG_PWRON);//power on usb D+ high
@@ -1330,18 +1234,9 @@ int usb_gadget_unregister_driver (struct usb_gadget_driver *driver)
         if (!driver || driver != udc->driver)
                 return -EINVAL;
 
-        printk("usb_gadget_unregister_driver() '%s'\n",
-               driver->driver.name);
-
-        printk("call driver->unbind\n");
         driver->unbind (&udc->gadget);
         udc->driver = 0;
 
-        printk("device_release_driver\n");
-#if 0
-        device_release_driver (&udc->gadget.dev);
-        driver_unregister (&driver->driver);
-#endif
         __raw_writel(__raw_readl(REG_PWRON) & ~0x400, REG_PWRON);//power off usb D+ high
 
 
@@ -1367,8 +1262,6 @@ static void udc_isr_rst(struct nuc900_udc	*dev)
 
         dev->usb_devstate = 1;		//default state
 
-        printk("speed:%x\n", __raw_readl(controller.reg + REG_USBD_OPER));
-
         __raw_writel(__raw_readl(controller.reg + REG_USBD_CEP_CTRL_STAT)|CEP_FLUSH,
                      controller.reg + REG_USBD_CEP_CTRL_STAT);// flush fifo
         for (i = 1; i < NUC900_ENDPOINTS; i++) {
@@ -1390,7 +1283,6 @@ static void udc_isr_dma(struct nuc900_udc *dev)
         u32 datacnt_reg;
 
         if (!dev->usb_dma_trigger) {
-                printk("DMA not trigger, intr?\n");
                 return;
         }
 
@@ -1406,13 +1298,11 @@ static void udc_isr_dma(struct nuc900_udc *dev)
 
 
         if (list_empty(&ep->queue)) {
-                printk("DMA ep->queue is empty\n");
                 req = 0;
                 __raw_writel(dev->irq_enbl, controller.reg + REG_USBD_IRQ_ENB_L);
                 return;
         } else {
                 req = list_entry(ep->queue.next, struct nuc900_request, queue);
-                //printk("req = %x\n", req);
         }
 
         if (req) {
@@ -1448,7 +1338,6 @@ static void udc_isr_dma(struct nuc900_udc *dev)
         if (dev->usb_dma_dir == Ep_Out) {
                 if (dev->usb_dma_trigger_next) {
                         dev->usb_dma_trigger_next = 0;
-                        printk("dma out\n");
                         read_fifo(ep, req, 0);
                 }
         }
@@ -1461,7 +1350,6 @@ static void udc_isr_dma(struct nuc900_udc *dev)
 
                 if (dev->usb_dma_trigger_next) {
                         dev->usb_dma_trigger_next = 0;
-                        printk("dma in\n");
                         write_fifo(ep, req);
                 }
         }
@@ -1478,11 +1366,9 @@ static void udc_isr_ctrl_pkt(struct nuc900_udc *dev)
         int ret;
 
         if (list_empty(&ep->queue)) {
-                //printk("ctrl ep->queue is empty\n");
                 req = 0;
         } else {
                 req = list_entry(ep->queue.next, struct nuc900_request, queue);
-                //printk("req = %x\n", req);
         }
 
         temp = __raw_readl(controller.reg + REG_USBD_SETUP1_0);
@@ -1578,14 +1464,8 @@ static void udc_isr_ctrl_pkt(struct nuc900_udc *dev)
                         __raw_writel(0x448, controller.reg + REG_USBD_CEP_IRQ_ENB);		// enable in/RxED/status complete interrupt
                         __raw_writel(CEP_NAK_CLEAR, controller.reg + REG_USBD_CEP_CTRL_STAT);	//clear nak so that sts stage is complete
 
-
-                        if (ret == -EOPNOTSUPP)
-                                printk("Operation %x not supported\n", crq.bRequest);
-                        else {
-                                printk("dev->driver->setup failed. (%d)\n",ret);
-                        }
                 } else if (ret > 1000) { //DELAYED_STATUS
-                        printk("DELAYED_STATUS:%p\n", req);
+
                         dev->ep0state = EP0_END_XFER;
                         __raw_writel(0, controller.reg + REG_USBD_CEP_IRQ_ENB);
                 }
@@ -1623,40 +1503,9 @@ void udc_isr_update_dev(struct nuc900_udc *dev)
                 break;
 
         case USBR_SET_FEATURE:
-#if 0
-                for (i = 1; i < NUC900_ENDPOINTS; i++) {
-                        if (dev->ep[i].EP_Num == dev->usb_haltep) {
-                                index = i;
-                                break;
-                        }
-                }
-                if (dev->usb_haltep == 0)
-                        USB_WRITE(REG_USBD_CEP_CTRL_STAT, CEP_SEND_STALL);
-                else if (index)
-                        USB_WRITE(REG_USBD_EPA_RSP_SC + 0x28*(dev->ep[index].index-1), EP_HALT);
-                else if (dev->usb_enableremotewakeup == 1) {
-                        dev->usb_enableremotewakeup = 0;
-                        dev->usb_remotewakeup = 1;
-                }
-#endif
                 break;
 
         case USBR_CLEAR_FEATURE:
-#if 0
-                if (dev->usb_unhaltep == 1 && dev->usb_haltep == 1) {
-                        USB_WRITE(REG_USBD_EPA_RSP_SC, 0x0);
-                        USB_WRITE(REG_USBD_EPA_RSP_SC, EP_TOGGLE);
-                        dev->usb_haltep = 4; // just for changing the haltep value
-                }
-                if (dev->usb_unhaltep == 2 && dev->usb_haltep == 2) {
-                        USB_WRITE(REG_USBD_EPB_RSP_SC, 0x0);
-                        USB_WRITE(REG_USBD_EPB_RSP_SC, EP_TOGGLE);
-                        dev->usb_haltep = 4; // just for changing the haltep value
-                } else if (dev->usb_disableremotewakeup == 1) {
-                        dev->usb_disableremotewakeup=0;
-                        dev->usb_remotewakeup=0;
-                }
-#endif
                 break;
 
         default:
@@ -1825,13 +1674,7 @@ static int /*__init*/ nuc900_udc_probe(struct platform_device *pdev)
         device_initialize(&udc->gadget.dev);
         dev_set_name(&udc->gadget.dev, "gadget");
         udc->gadget.dev.parent = dev;
-#if 0
-        error = device_register (&udc->gadget.dev);
-        if (error < 0) {
-                dev_err(dev, "device_register() fail\n");
-                goto fail2;
-        }
-#endif
+
 
         platform_set_drvdata (pdev, udc);
 
@@ -1853,7 +1696,6 @@ static int /*__init*/ nuc900_udc_probe(struct platform_device *pdev)
         for (i = 0; i < NUC900_ENDPOINTS; i++) {
                 struct nuc900_ep *ep = &udc->ep[i];
 
-                printk("ep %d\n", i);
                 if (!ep_name[i])
                         break;
                 ep->index = i;
@@ -1869,8 +1711,6 @@ static int /*__init*/ nuc900_udc_probe(struct platform_device *pdev)
                         __raw_writel(0x0000003f, controller.reg + REG_USBD_CEP_END_ADDR);
                 } else {
                         ep->ep.maxpacket = EP_FIFO_SIZE;
-                        //sram_addr = udc->ep[0].ep.maxpacket + EP_FIFO_SIZE * (i - 1);
-                        //printk("sram_addr=%x\n", sram_addr);
                         __raw_writel(0, controller.reg + REG_USBD_EPA_START_ADDR+0x28*(ep->index-1));
                         __raw_writel(0, controller.reg + REG_USBD_EPA_END_ADDR+0x28*(ep->index-1));
                 }

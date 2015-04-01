@@ -24,25 +24,25 @@
 #define DRV_MODULE_VERSION	"0.1"
 
 /* Ethernet MAC Registers */
-#define REG_CAMCMR		0x00
-#define REG_CAMEN		0x04
-#define REG_CAMM_BASE		0x08
-#define REG_CAML_BASE		0x0c
-#define REG_TXDLSA		0x88
-#define REG_RXDLSA		0x8C
-#define REG_MCMDR		0x90
-#define REG_MIID		0x94
-#define REG_MIIDA		0x98
-#define REG_FFTCR		0x9C
-#define REG_TSDR		0xa0
-#define REG_RSDR		0xa4
-#define REG_DMARFC		0xa8
-#define REG_MIEN		0xac
-#define REG_MISTA		0xb0
-#define REG_CTXDSA		0xcc
-#define REG_CTXBSA		0xd0
-#define REG_CRXDSA		0xd4
-#define REG_CRXBSA		0xd8
+#define REG_CAMCMR		0xF0003000
+#define REG_CAMEN		0xF0003004
+#define REG_CAMM_BASE		0xF0003008
+#define REG_CAML_BASE		0xF000300c
+#define REG_TXDLSA		0xF0003088
+#define REG_RXDLSA		0xF000308C
+#define REG_MCMDR		0xF0003090
+#define REG_MIID		0xF0003094
+#define REG_MIIDA		0xF0003098
+#define REG_FFTCR		0xF000309C
+#define REG_TSDR		0xF00030a0
+#define REG_RSDR		0xF00030a4
+#define REG_DMARFC		0xF00030a8
+#define REG_MIEN		0xF00030ac
+#define REG_MISTA		0xF00030b0
+#define REG_CTXDSA		0xF00030cc
+#define REG_CTXBSA		0xF00030d0
+#define REG_CRXDSA		0xF00030d4
+#define REG_CRXBSA		0xF00030d8
 
 /* mac controller bit */
 #define MCMDR_RXON		0x01
@@ -88,6 +88,7 @@
 #define ENSTART			0x01
 #define ENRXINTR		0x01
 #define ENRXGD			(0x01 << 4)
+#define ENRDU			(0x01 << 10)
 #define ENRXBERR		(0x01 << 11)
 #define ENTXINTR		(0x01 << 16)
 #define ENTXCP			(0x01 << 18)
@@ -113,8 +114,8 @@
 #define BLENGTH			(0x01 << 20)
 
 /* global setting for driver */
-#define RX_DESC_SIZE		50
-#define TX_DESC_SIZE		10
+#define RX_DESC_SIZE		32
+#define TX_DESC_SIZE		16
 #define MAX_RBUFF_SZ		0x600
 #define MAX_TBUFF_SZ		0x600
 #define TX_TIMEOUT		50
@@ -122,6 +123,7 @@
 #define CAM0			0x0
 
 static int nuc900_mdio_read(struct net_device *dev, int phy_id, int reg);
+extern void mfp_set_groupf(struct device *dev);
 
 struct nuc900_rxbd {
 	unsigned int sl;
@@ -176,10 +178,9 @@ struct  nuc900_ether {
 static void update_linkspeed_register(struct net_device *dev,
 				unsigned int speed, unsigned int duplex)
 {
-	struct nuc900_ether *ether = netdev_priv(dev);
 	unsigned int val;
 
-	val = __raw_readl(ether->reg + REG_MCMDR);
+	val = __raw_readl( REG_MCMDR);
 
 	if (speed == SPEED_100) {
 		/* 100 full/half duplex */
@@ -199,7 +200,7 @@ static void update_linkspeed_register(struct net_device *dev,
 		}
 	}
 
-	__raw_writel(val, ether->reg + REG_MCMDR);
+	__raw_writel(val,  REG_MCMDR);
 }
 
 static void update_linkspeed(struct net_device *dev)
@@ -265,15 +266,14 @@ static void nuc900_check_link(unsigned long dev_id)
 static void nuc900_write_cam(struct net_device *dev,
 				unsigned int x, unsigned char *pval)
 {
-	struct nuc900_ether *ether = netdev_priv(dev);
 	unsigned int msw, lsw;
 
 	msw = (pval[0] << 24) | (pval[1] << 16) | (pval[2] << 8) | pval[3];
 
 	lsw = (pval[4] << 24) | (pval[5] << 16);
 
-	__raw_writel(lsw, ether->reg + REG_CAML_BASE + x * CAM_ENTRY_SIZE);
-	__raw_writel(msw, ether->reg + REG_CAMM_BASE + x * CAM_ENTRY_SIZE);
+	__raw_writel(lsw,  REG_CAML_BASE + x * CAM_ENTRY_SIZE);
+	__raw_writel(msw,  REG_CAMM_BASE + x * CAM_ENTRY_SIZE);
 }
 
 static int nuc900_init_desc(struct net_device *dev)
@@ -349,124 +349,112 @@ static int nuc900_init_desc(struct net_device *dev)
 
 static void nuc900_set_fifo_threshold(struct net_device *dev)
 {
-	struct nuc900_ether *ether = netdev_priv(dev);
 	unsigned int val;
 
 	val = TXTHD | BLENGTH;
-	__raw_writel(val, ether->reg + REG_FFTCR);
+	__raw_writel(val,  REG_FFTCR);
 }
 
 static void nuc900_return_default_idle(struct net_device *dev)
 {
-	struct nuc900_ether *ether = netdev_priv(dev);
 	unsigned int val;
 
-	val = __raw_readl(ether->reg + REG_MCMDR);
+	val = __raw_readl( REG_MCMDR);
 	val |= SWR;
-	__raw_writel(val, ether->reg + REG_MCMDR);
+	__raw_writel(val,  REG_MCMDR);
 }
 
 static void nuc900_trigger_rx(struct net_device *dev)
 {
-	struct nuc900_ether *ether = netdev_priv(dev);
 
-	__raw_writel(ENSTART, ether->reg + REG_RSDR);
+	__raw_writel(ENSTART,  REG_RSDR);
 }
 
 static void nuc900_trigger_tx(struct net_device *dev)
 {
-	struct nuc900_ether *ether = netdev_priv(dev);
 
-	__raw_writel(ENSTART, ether->reg + REG_TSDR);
+	__raw_writel(ENSTART,  REG_TSDR);
 }
 
 static void nuc900_enable_mac_interrupt(struct net_device *dev)
 {
-	struct nuc900_ether *ether = netdev_priv(dev);
 	unsigned int val;
 
-	val = ENTXINTR | ENRXINTR | ENRXGD | ENTXCP;
+	val = ENTXINTR | ENRXINTR | ENRXGD | ENTXCP | ENRDU;
 	val |= ENTXBERR | ENRXBERR | ENTXABT;
 
-	__raw_writel(val, ether->reg + REG_MIEN);
+	__raw_writel(val,  REG_MIEN);
 }
 
 static void nuc900_get_and_clear_int(struct net_device *dev,
-							unsigned int *val)
+							unsigned int *val, unsigned int mask)
 {
-	struct nuc900_ether *ether = netdev_priv(dev);
-
-	*val = __raw_readl(ether->reg + REG_MISTA);
-	__raw_writel(*val, ether->reg + REG_MISTA);
+	*val = __raw_readl( REG_MISTA) & mask;
+	__raw_writel(*val,  REG_MISTA);
 }
 
 static void nuc900_set_global_maccmd(struct net_device *dev)
 {
-	struct nuc900_ether *ether = netdev_priv(dev);
 	unsigned int val;
 
-	val = __raw_readl(ether->reg + REG_MCMDR);
+	val = __raw_readl( REG_MCMDR);
 	val |= MCMDR_SPCRC | MCMDR_ENMDC | MCMDR_ACP | ENMDC;
-	__raw_writel(val, ether->reg + REG_MCMDR);
+	__raw_writel(val,  REG_MCMDR);
 }
 
 static void nuc900_enable_cam(struct net_device *dev)
 {
-	struct nuc900_ether *ether = netdev_priv(dev);
 	unsigned int val;
 
 	nuc900_write_cam(dev, CAM0, dev->dev_addr);
 
-	val = __raw_readl(ether->reg + REG_CAMEN);
+	val = __raw_readl( REG_CAMEN);
 	val |= CAM0EN;
-	__raw_writel(val, ether->reg + REG_CAMEN);
+	__raw_writel(val,  REG_CAMEN);
 }
 
 static void nuc900_enable_cam_command(struct net_device *dev)
 {
-	struct nuc900_ether *ether = netdev_priv(dev);
 	unsigned int val;
 
 	val = CAMCMR_ECMP | CAMCMR_ABP | CAMCMR_AMP;
-	__raw_writel(val, ether->reg + REG_CAMCMR);
+	__raw_writel(val,  REG_CAMCMR);
 }
 
 static void nuc900_enable_tx(struct net_device *dev, unsigned int enable)
 {
-	struct nuc900_ether *ether = netdev_priv(dev);
 	unsigned int val;
 
-	val = __raw_readl(ether->reg + REG_MCMDR);
+	val = __raw_readl( REG_MCMDR);
 
 	if (enable)
 		val |= MCMDR_TXON;
 	else
 		val &= ~MCMDR_TXON;
 
-	__raw_writel(val, ether->reg + REG_MCMDR);
+	__raw_writel(val,  REG_MCMDR);
 }
 
 static void nuc900_enable_rx(struct net_device *dev, unsigned int enable)
 {
-	struct nuc900_ether *ether = netdev_priv(dev);
 	unsigned int val;
 
-	val = __raw_readl(ether->reg + REG_MCMDR);
+	val = __raw_readl( REG_MCMDR);
 
 	if (enable)
 		val |= MCMDR_RXON;
 	else
 		val &= ~MCMDR_RXON;
 
-	__raw_writel(val, ether->reg + REG_MCMDR);
+	__raw_writel(val,  REG_MCMDR);
 }
 
 static void nuc900_set_curdest(struct net_device *dev)
 {
 	struct nuc900_ether *ether = netdev_priv(dev);
 
-	__raw_writel(ether->start_rx_ptr, ether->reg + REG_RXDLSA);
-	__raw_writel(ether->start_tx_ptr, ether->reg + REG_TXDLSA);
+	__raw_writel(ether->start_rx_ptr,  REG_RXDLSA);
+	__raw_writel(ether->start_tx_ptr,  REG_TXDLSA);
 }
 
 static void nuc900_reset_mac(struct net_device *dev)
@@ -475,8 +463,9 @@ static void nuc900_reset_mac(struct net_device *dev)
 
 	nuc900_enable_tx(dev, 0);
 	nuc900_enable_rx(dev, 0);
-	nuc900_set_fifo_threshold(dev);
+
 	nuc900_return_default_idle(dev);
+	nuc900_set_fifo_threshold(dev);
 
 	if (!netif_queue_stopped(dev))
 		netif_stop_queue(dev);
@@ -512,14 +501,14 @@ static void nuc900_mdio_write(struct net_device *dev,
 
 	pdev = ether->pdev;
 
-	__raw_writel(data, ether->reg + REG_MIID);
+	__raw_writel(data,  REG_MIID);
 
 	val = (phy_id << 0x08) | reg;
 	val |= PHYBUSY | PHYWR | MDCCR_VAL;
-	__raw_writel(val, ether->reg + REG_MIIDA);
+	__raw_writel(val,  REG_MIIDA);
 
 	for (i = 0; i < DELAY; i++) {
-		if ((__raw_readl(ether->reg + REG_MIIDA) & PHYBUSY) == 0)
+		if ((__raw_readl( REG_MIIDA) & PHYBUSY) == 0)
 			break;
 	}
 
@@ -537,10 +526,10 @@ static int nuc900_mdio_read(struct net_device *dev, int phy_id, int reg)
 
 	val = (phy_id << 0x08) | reg;
 	val |= PHYBUSY | MDCCR_VAL;
-	__raw_writel(val, ether->reg + REG_MIIDA);
+	__raw_writel(val,  REG_MIIDA);
 
 	for (i = 0; i < DELAY; i++) {
-		if ((__raw_readl(ether->reg + REG_MIIDA) & PHYBUSY) == 0)
+		if ((__raw_readl( REG_MIIDA) & PHYBUSY) == 0)
 			break;
 	}
 
@@ -548,7 +537,7 @@ static int nuc900_mdio_read(struct net_device *dev, int phy_id, int reg)
 		dev_warn(&pdev->dev, "mdio read timed out\n");
 		data = 0xffff;
 	} else {
-		data = __raw_readl(ether->reg + REG_MIID);
+		data = __raw_readl( REG_MIID);
 	}
 
 	return data;
@@ -619,7 +608,7 @@ static int nuc900_send_frame(struct net_device *dev,
 		length = 1514;
 	}
 
-	txbd->sl = length & 0xFFFF;
+	txbd->sl = length /*& 0xFFFF*/;
 
 	memcpy(buffer, data, length);
 
@@ -642,10 +631,8 @@ static int nuc900_send_frame(struct net_device *dev,
 
 static int nuc900_ether_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-	struct nuc900_ether *ether = netdev_priv(dev);
-
 	if (!(nuc900_send_frame(dev, skb->data, skb->len))) {
-		ether->skb = skb;
+		//ether->skb = skb;
 		dev_kfree_skb_irq(skb);
 		return 0;
 	}
@@ -664,9 +651,9 @@ static irqreturn_t nuc900_tx_interrupt(int irq, void *dev_id)
 	ether = netdev_priv(dev);
 	pdev = ether->pdev;
 
-	nuc900_get_and_clear_int(dev, &status);
+	nuc900_get_and_clear_int(dev, &status, 0xFFFF0000);
 
-	cur_entry = __raw_readl(ether->reg + REG_CTXDSA);
+	cur_entry = __raw_readl( REG_CTXDSA);
 
 	entry = ether->tdesc_phys +
 		offsetof(struct tran_pdesc, desclist[ether->finish_tx]);
@@ -687,7 +674,7 @@ static irqreturn_t nuc900_tx_interrupt(int irq, void *dev_id)
 		txbd->sl = 0x0;
 		txbd->mode = 0x0;
 
-		if (netif_queue_stopped(dev))
+		//if (netif_queue_stopped(dev))
 			netif_wake_queue(dev);
 
 		entry = ether->tdesc_phys +
@@ -700,7 +687,7 @@ static irqreturn_t nuc900_tx_interrupt(int irq, void *dev_id)
 		dev_err(&pdev->dev, "emc bus error interrupt\n");
 		nuc900_reset_mac(dev);
 	} else if (status & MISTA_TDU) {
-		if (netif_queue_stopped(dev))
+		//if (netif_queue_stopped(dev))
 			netif_wake_queue(dev);
 	}
 
@@ -714,7 +701,7 @@ static void netdev_rx(struct net_device *dev)
 	struct platform_device *pdev;
 	struct sk_buff *skb;
 	unsigned char *data;
-	unsigned int length, status, val, entry;
+	unsigned int length, status;
 
 	ether = netdev_priv(dev);
 	pdev = ether->pdev;
@@ -722,12 +709,8 @@ static void netdev_rx(struct net_device *dev)
 	rxbd = &ether->rdesc->desclist[ether->cur_rx];
 
 	do {
-		val = __raw_readl(ether->reg + REG_CRXDSA);
 
-		entry = ether->rdesc_phys +
-			offsetof(struct recv_pdesc, desclist[ether->cur_rx]);
-
-		if (val == entry)
+		if ((rxbd->sl & RX_OWEN_DMA) == RX_OWEN_DMA)  // owner is EMAC
 			break;
 
 		status = rxbd->sl;
@@ -739,7 +722,7 @@ static void netdev_rx(struct net_device *dev)
 			if (!skb) {
 				dev_err(&pdev->dev, "get skb buffer error\n");
 				ether->stats.rx_dropped++;
-				return;
+				goto next_desc;
 			}
 
 			skb_reserve(skb, 2);
@@ -767,6 +750,7 @@ static void netdev_rx(struct net_device *dev)
 			}
 		}
 
+next_desc:
 		rxbd->sl = RX_OWEN_DMA;
 		rxbd->reserved = 0x0;
 
@@ -781,27 +765,22 @@ static void netdev_rx(struct net_device *dev)
 static irqreturn_t nuc900_rx_interrupt(int irq, void *dev_id)
 {
 	struct net_device *dev;
-	struct nuc900_ether  *ether;
-	struct platform_device *pdev;
+
 	unsigned int status;
-
 	dev = dev_id;
-	ether = netdev_priv(dev);
-	pdev = ether->pdev;
 
-	nuc900_get_and_clear_int(dev, &status);
 
-	if (status & MISTA_RDU) {
-		netdev_rx(dev);
-		nuc900_trigger_rx(dev);
+	nuc900_get_and_clear_int(dev, &status, 0xFFFF);
 
-		return IRQ_HANDLED;
-	} else if (status & MISTA_RXBERR) {
+	if (status & MISTA_RXBERR) {
+		struct nuc900_ether  *ether = netdev_priv(dev);
+		struct platform_device *pdev = ether->pdev;
 		dev_err(&pdev->dev, "emc rx bus error\n");
 		nuc900_reset_mac(dev);
 	}
 
 	netdev_rx(dev);
+	nuc900_trigger_rx(dev);
 	return IRQ_HANDLED;
 }
 
@@ -863,7 +842,7 @@ static void nuc900_ether_set_multicast_list(struct net_device *dev)
 		rx_mode = CAMCMR_AMP | CAMCMR_ABP | CAMCMR_ECMP;
 	else
 		rx_mode = CAMCMR_ECMP | CAMCMR_ABP;
-	__raw_writel(rx_mode, ether->reg + REG_CAMCMR);
+	__raw_writel(rx_mode,  REG_CAMCMR);
 }
 
 static int nuc900_ether_ioctl(struct net_device *dev,
@@ -997,11 +976,14 @@ static int __devinit nuc900_ether_probe(struct platform_device *pdev)
 		goto failed_free;
 	}
 
-	ether->reg = ioremap(ether->res->start, resource_size(ether->res));
+	//ether->reg = ioremap(ether->res->start, resource_size(ether->res));
+	ether->reg = 0xF0003000;
 	if (ether->reg == NULL) {
 		dev_err(&pdev->dev, "failed to remap I/O memory\n");
 		error = -ENXIO;
 		goto failed_free_mem;
+	} else {
+		printk("@@@@=> %x\n", ether->reg);
 	}
 
 	ether->txirq = platform_get_irq(pdev, 0);
@@ -1019,6 +1001,8 @@ static int __devinit nuc900_ether_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, dev);
+
+	mfp_set_groupf(&pdev->dev);
 
 	ether->clk = clk_get(&pdev->dev, NULL);
 	if (IS_ERR(ether->clk)) {
@@ -1096,8 +1080,11 @@ static struct platform_driver nuc900_ether_driver = {
 	},
 };
 
+#include <mach/regs-ebi.h>
+#define W90X900_VA_EBI 0xF0001000
 static int __init nuc900_ether_init(void)
 {
+
 	return platform_driver_register(&nuc900_ether_driver);
 }
 

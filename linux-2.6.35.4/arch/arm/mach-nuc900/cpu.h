@@ -29,7 +29,7 @@
 	.membase	= name##_BA,				\
 	.mapbase	= name##_PA,				\
 	.irq		= IRQ_##name,				\
-	.uartclk	= 11313600,				\
+	.uartclk	= 15000000,				\
 	.regshift	= 2,					\
 	.iotype		= UPIO_MEM,				\
 	.flags		= UPF_BOOT_AUTOCONF | UPF_SKIP_TEST,	\

@@ -223,6 +223,7 @@ extern FMI_SM_INFO_T *pSM0;
 static int nand_nand_card_reset(void)
 {
         int retval;
+	int nSectorPerPage;
 
         mdelay(100);
 
@@ -235,7 +236,9 @@ static int nand_nand_card_reset(void)
                 printk("GNAND init failed !!!!!!!! \n");
                 return -1;
         }
-        nand_host.nTotalSectors = pSM0->uSectorPerFlash - pSM0->uLibStartBlock;
+  //nand_host.nTotalSectors = pSM0->uSectorPerFlash - pSM0->uLibStartBlock;
+  nSectorPerPage = ptNDisk->nPageSize / 512;
+  nand_host.nTotalSectors = ptNDisk->nZone * (ptNDisk->nLBPerZone-1) * ptNDisk->nPagePerBlock * nSectorPerPage;
 
         nand_host.nSectorSize = 512;
         nand_host.nCapacityInByte = nand_host.nTotalSectors * nand_host.nSectorSize;
@@ -1320,3 +1323,4 @@ static void __exit nand_exit(void)
 
 module_init(nand_init);
 module_exit(nand_exit);
+MODULE_VERSION( "V1.00" );

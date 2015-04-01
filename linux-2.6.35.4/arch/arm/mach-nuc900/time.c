@@ -165,11 +165,10 @@ static void __init nuc900_clocksource_init(void)
 
 	BUG_ON(IS_ERR(clk));
 
-	__raw_writel(0x00, REG_TCSR1);
-
 	clk_enable(clk);
 	rate = clk_get_rate(clk) / (PRESCALE + 1);
 
+	__raw_writel(0x00, REG_TCSR1);
 	__raw_writel(0xffffffff, REG_TICR1);
 
 	val = __raw_readl(REG_TCSR1);

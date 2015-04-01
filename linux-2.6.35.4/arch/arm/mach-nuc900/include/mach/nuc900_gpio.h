@@ -12,7 +12,7 @@
  *
  *   2008/11/10     First version
  */
-#include <mach/nuc900_reg.h>
+#include <mach/regs-gpio.h>
 
 /* GPIO group definition */
 #define GPIO_GROUP_C 0

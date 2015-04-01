@@ -39,6 +39,7 @@
 #include <linux/nmi.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
+#include <linux/uaccess.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -144,6 +145,7 @@ struct uart_8250_port {
 	unsigned char		mcr_mask;	/* mask of user bits */
 	unsigned char		mcr_force;	/* mask of forced bits */
 	unsigned char		cur_iotype;	/* Running I/O type */
+	struct serial_rs485     rs485;          /* rs485 settings */
 
 	/*
 	 * Some bits in registers are cleared on a read, so they must
@@ -172,6 +174,25 @@ struct irq_info {
 #define NR_IRQ_HASH		32	/* Can be adjusted later */
 static struct hlist_head irq_lists[NR_IRQ_HASH];
 static DEFINE_MUTEX(hash_mutex);	/* Used to walk the hash */
+
+
+static inline struct uart_8250_port *
+to_8250_uart_port(struct uart_port *uart)
+{
+	return container_of(uart, struct uart_8250_port, port);
+}
+
+static void rs485_start_rx(struct uart_8250_port *port)
+{
+	// WRITE ME:
+
+}
+
+static void rs485_stop_rx(struct uart_8250_port *port)
+{
+	// WRITE ME:
+
+}
 
 /*
  * Here we define the default xmit fifo size used for each type of UART.
@@ -1309,6 +1330,8 @@ static inline void __stop_tx(struct uart_8250_port *p)
 		p->ier &= ~UART_IER_THRI;
 		serial_out(p, UART_IER, p->ier);
 	}
+	if (p->rs485.flags & SER_RS485_ENABLED)
+		rs485_start_rx(p);
 }
 
 static void serial8250_stop_tx(struct uart_port *port)
@@ -1331,6 +1354,9 @@ static void transmit_chars(struct uart_8250_port *up);
 static void serial8250_start_tx(struct uart_port *port)
 {
 	struct uart_8250_port *up = (struct uart_8250_port *)port;
+
+	if (up->rs485.flags & SER_RS485_ENABLED)
+		rs485_stop_rx(up);
 
 	if (!(up->ier & UART_IER_THRI)) {
 		up->ier |= UART_IER_THRI;
@@ -2212,7 +2238,6 @@ static void serial8250_shutdown(struct uart_port *port)
 static unsigned int serial8250_get_divisor(struct uart_port *port, unsigned int baud)
 {
 	unsigned int quot;
-
 	/*
 	 * Handle magic divisors for baud rates above baud_base on
 	 * SMSC SuperIO chips.
@@ -2225,6 +2250,12 @@ static unsigned int serial8250_get_divisor(struct uart_port *port, unsigned int 
 		quot = 0x8002;
 	else
 		quot = uart_get_divisor(port, baud);
+
+#if CONFIG_ARCH_W90X900
+	quot = (port->uartclk / (baud * 16)) - 2;
+        if((port->uartclk % (baud * 16)) > (baud * 16 / 2))
+                quot++;
+#endif
 
 	return quot;
 }
@@ -2632,6 +2663,48 @@ serial8250_type(struct uart_port *port)
 	return uart_config[type].name;
 }
 
+/* Enable or disable the rs485 support */
+void serial8250_config_rs485(struct uart_port *port, struct serial_rs485 *rs485conf)
+{
+	struct uart_8250_port *p = to_8250_uart_port(port);
+
+	spin_lock(&port->lock);
+
+	p->rs485 = *rs485conf;
+	if(rs485conf->flags & SER_RS485_ENABLED) {
+		rs485_start_rx(p);	// stay in Rx mode 	
+	}
+
+	spin_unlock(&port->lock);
+}
+
+static int
+serial8250_rs485_ioctl(struct uart_port *port, unsigned int cmd, unsigned long arg)
+{
+	struct serial_rs485 rs485conf;
+
+	switch (cmd) {
+	case TIOCSRS485:
+		if (copy_from_user(&rs485conf, (struct serial_rs485 *) arg,
+					sizeof(rs485conf)))
+			return -EFAULT;
+
+		serial8250_config_rs485(port, &rs485conf);
+		break;
+
+	case TIOCGRS485:
+		if (copy_to_user((struct serial_rs485 *) arg,
+					&(to_8250_uart_port(port)->rs485),
+					sizeof(rs485conf)))
+			return -EFAULT;
+		break;
+
+	default:
+		return -ENOIOCTLCMD;
+	}
+	return 0;
+}
+
 static struct uart_ops serial8250_pops = {
 	.tx_empty	= serial8250_tx_empty,
 	.set_mctrl	= serial8250_set_mctrl,
@@ -2651,6 +2724,7 @@ static struct uart_ops serial8250_pops = {
 	.request_port	= serial8250_request_port,
 	.config_port	= serial8250_config_port,
 	.verify_port	= serial8250_verify_port,
+	.ioctl		= serial8250_rs485_ioctl,
 #ifdef CONFIG_CONSOLE_POLL
 	.poll_get_char = serial8250_get_poll_char,
 	.poll_put_char = serial8250_put_poll_char,

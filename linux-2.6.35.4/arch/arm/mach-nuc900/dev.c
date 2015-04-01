@@ -583,6 +583,12 @@ struct platform_device nuc900_device_i2c_p1 = {
 
 EXPORT_SYMBOL(nuc900_device_i2c_p1);
 
+static struct platform_device nuc900_device_gpioi2c = {
+	.name		= "nuc900-gpioi2c",
+	.id		= 0,
+	.num_resources	= 0
+};
+
 static struct platform_device *nuc900_public_dev[] __initdata = {
         &nuc900_serial_device,
         &nuc900_flash_device,
@@ -596,6 +602,7 @@ static struct platform_device *nuc900_public_dev[] __initdata = {
         &nuc900_device_audio_i2s,
         &nuc900_device_i2c_p0,
         &nuc900_device_i2c_p1,
+        &nuc900_device_gpioi2c,
 };
 
 /* Provide adding specific CPU platform devices API */

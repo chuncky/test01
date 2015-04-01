@@ -1,5 +1,5 @@
 /*
- * linux/arch/arm/mach-w90x900/mach-nuc950evb.c
+ * linux/arch/arm/mach-w90x900/mach-nuc951evb.c
  *
  * Based on mach-s3c2410/mach-smdk2410.c by Jonas Dietsche
  *
@@ -29,7 +29,7 @@
 #include <linux/i2c.h>
 #include <linux/i2c/tsc2007.h>
 
-#include "nuc950.h"
+#include "nuc951.h"
 /////////////////////////////////////////////////////////////
 //// tsc2007 touch driver support
 /////////////////////////////////////////////////////////////
@@ -68,51 +68,33 @@ static struct i2c_board_info __initdata nuc900_i2c_clients[] = {
         {
                 I2C_BOARD_INFO("nau8822", 0x1a),
         },
-#ifdef CONFIG_EEPROM_AT24
-        {
-                I2C_BOARD_INFO("at24", 0x50),
-                .type="24c16",
-        },        
-#endif
         {
                 I2C_BOARD_INFO("tsc2007", 0x48),
                 .type = "tsc2007",
                 .platform_data = &nuc900_tsc2007_data,
                 .irq = IRQ_GROUP0,
         },
-#ifdef CONFIG_RTC_DRV_PCF8563        
-        {
-		I2C_BOARD_INFO("rtc-pcf8563", 0x51),
-		.type = "pcf8563",
-        },
-#endif        
-#ifdef CONFIG_RTC_DRV_HT1382
-        {
-                I2C_BOARD_INFO("rtc-ht1382", 0x68),
-                .type = "ht1382",
-        },        
-#endif
 };
 
-static void __init nuc950evb_map_io(void)
+static void __init nuc951evb_map_io(void)
 {
-	nuc950_map_io();
-	nuc950_init_clocks();
+	nuc951_map_io();
+	nuc951_init_clocks();
 }
 
-static void __init nuc950evb_init(void)
+static void __init nuc951evb_init(void)
 {
-	nuc950_board_init();
+	nuc951_board_init();
         i2c_register_board_info(0, nuc900_i2c_clients, sizeof(nuc900_i2c_clients)/sizeof(struct i2c_board_info));
 }
 
-MACHINE_START(W90X900, "W90P950EVB")
+MACHINE_START(W90X900, "W90P951EVB")
 	/* Maintainer: Wan ZongShun */
 	.phys_io	= W90X900_PA_UART,
 	.io_pg_offst	= (((u32)W90X900_VA_UART) >> 18) & 0xfffc,
 	.boot_params	= 0x100,
-	.map_io		= nuc950evb_map_io,
+	.map_io		= nuc951evb_map_io,
 	.init_irq	= nuc900_init_irq,
-	.init_machine	= nuc950evb_init,
+	.init_machine	= nuc951evb_init,
 	.timer		= &nuc900_timer,
 MACHINE_END

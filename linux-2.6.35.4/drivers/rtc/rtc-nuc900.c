@@ -107,7 +107,7 @@ static void nuc900_rtc_bcd2bin(unsigned int timereg,
 				unsigned int calreg, struct rtc_time *tm)
 {
 	tm->tm_mday	= bcd2bin(calreg >> 0);
-	tm->tm_mon	= bcd2bin(calreg >> 8);
+	tm->tm_mon	= bcd2bin(calreg >> 8) - 1;
 	tm->tm_year	= bcd2bin(calreg >> 16) + 100;
 
 	tm->tm_sec	= bcd2bin(timereg >> 0);
@@ -121,7 +121,7 @@ static void nuc900_rtc_bin2bcd(struct rtc_time *settm,
 						struct nuc900_bcd_time *gettm)
 {
 	gettm->bcd_mday = bin2bcd(settm->tm_mday) << 0;
-	gettm->bcd_mon  = bin2bcd(settm->tm_mon) << 8;
+	gettm->bcd_mon  = bin2bcd(settm->tm_mon + 1) << 8;
 	gettm->bcd_year = bin2bcd(settm->tm_year - 100) << 16;
 
 	gettm->bcd_sec  = bin2bcd(settm->tm_sec) << 0;

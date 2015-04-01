@@ -16,6 +16,8 @@
 #ifndef __ASM_ARCH_REGS_GPIO_H
 #define __ASM_ARCH_REGS_GPIO_H
 
+#include <mach/map.h>
+#include <mach/regs-gcr.h>
 #define GPIO_BA   W90X900_VA_GPIO /* GPIO Control */
 
 /* GPIO Control Registers */

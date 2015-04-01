@@ -2817,7 +2817,9 @@ static void rtl8169_init_phy(struct net_device *dev, struct rtl8169_private *tp)
 		RTL_W8(0x82, 0x01);
 	}
 
+#ifndef CONFIG_ARCH_W90X900
 	pci_write_config_byte(tp->pci_dev, PCI_LATENCY_TIMER, 0x40);
+#endif
 
 	if (tp->mac_version <= RTL_GIGA_MAC_VER_06)
 		pci_write_config_byte(tp->pci_dev, PCI_CACHE_LINE_SIZE, 0x08);
@@ -3320,9 +3322,15 @@ static int rtl8169_open(struct net_device *dev)
 
 	smp_mb();
 
+#ifdef CONFIG_ARCH_W90X900
+	retval = request_irq(dev->irq, rtl8169_interrupt,
+			     0,
+			     dev->name, dev);
+#else
 	retval = request_irq(dev->irq, rtl8169_interrupt,
 			     (tp->features & RTL_FEATURE_MSI) ? 0 : IRQF_SHARED,
 			     dev->name, dev);
+#endif
 	if (retval < 0)
 		goto err_release_ring_2;
 
@@ -4008,7 +4016,7 @@ static inline void rtl8169_map_to_asic(struct RxDesc *desc, dma_addr_t mapping,
 static struct sk_buff *rtl8169_alloc_rx_skb(struct pci_dev *pdev,
 					    struct net_device *dev,
 					    struct RxDesc *desc, int rx_buf_sz,
-					    unsigned int align)
+					    unsigned int align, gfp_t gfp)
 {
 	struct sk_buff *skb;
 	dma_addr_t mapping;
@@ -4016,7 +4024,7 @@ static struct sk_buff *rtl8169_alloc_rx_skb(struct pci_dev *pdev,
 
 	pad = align ? align : NET_IP_ALIGN;
 
-	skb = netdev_alloc_skb(dev, rx_buf_sz + pad);
+	skb = __netdev_alloc_skb(dev, rx_buf_sz + pad, gfp);
 	if (!skb)
 		goto err_out;
 
@@ -4047,7 +4055,7 @@ static void rtl8169_rx_clear(struct rtl8169_private *tp)
 }
 
 static u32 rtl8169_rx_fill(struct rtl8169_private *tp, struct net_device *dev,
-			   u32 start, u32 end)
+			   u32 start, u32 end, gfp_t gfp)
 {
 	u32 cur;
 
@@ -4062,7 +4070,7 @@ static u32 rtl8169_rx_fill(struct rtl8169_private *tp, struct net_device *dev,
 
 		skb = rtl8169_alloc_rx_skb(tp->pci_dev, dev,
 					   tp->RxDescArray + i,
-					   tp->rx_buf_sz, tp->align);
+					   tp->rx_buf_sz, tp->align, gfp);
 		if (!skb)
 			break;
 
@@ -4090,7 +4098,7 @@ static int rtl8169_init_ring(struct net_device *dev)
 	memset(tp->tx_skb, 0x0, NUM_TX_DESC * sizeof(struct ring_info));
 	memset(tp->Rx_skbuff, 0x0, NUM_RX_DESC * sizeof(struct sk_buff *));
 
-	if (rtl8169_rx_fill(tp, dev, 0, NUM_RX_DESC) != NUM_RX_DESC)
+	if (rtl8169_rx_fill(tp, dev, 0, NUM_RX_DESC, GFP_KERNEL) != NUM_RX_DESC)
 		goto err_out;
 
 	rtl8169_mark_as_last_descriptor(tp->RxDescArray + NUM_RX_DESC - 1);
@@ -4542,6 +4550,7 @@ static int rtl8169_rx_interrupt(struct net_device *dev,
 			int pkt_size = (status & 0x00001FFF) - 4;
 			struct pci_dev *pdev = tp->pci_dev;
 
+			//printk("rx size = %d\n", pkt_size);
 			/*
 			 * The driver does not support incoming fragmented
 			 * frames. They are seen as a symptom of over-mtu
@@ -4591,7 +4600,7 @@ static int rtl8169_rx_interrupt(struct net_device *dev,
 	count = cur_rx - tp->cur_rx;
 	tp->cur_rx = cur_rx;
 
-	delta = rtl8169_rx_fill(tp, dev, tp->dirty_rx, tp->cur_rx);
+	delta = rtl8169_rx_fill(tp, dev, tp->dirty_rx, tp->cur_rx, GFP_ATOMIC);
 	if (!delta && count)
 		netif_info(tp, intr, dev, "no Rx buffer allocated\n");
 	tp->dirty_rx += delta;
@@ -4641,7 +4650,11 @@ static irqreturn_t rtl8169_interrupt(int irq, void *dev_instance)
 		}
 
 		if (unlikely(status & SYSErr)) {
+#ifdef CONFIG_ARCH_W90X900
+			RTL_W16(IntrStatus, SYSErr);
+#else
 			rtl8169_pcierr_interrupt(dev);
+#endif			
 			break;
 		}
 
