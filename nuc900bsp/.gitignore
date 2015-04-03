@@ -1,7 +1,7 @@
-#!image.tar.gz
-#!linux-2.6.35.4.tar.gz
-#!arm_linux_4.3.tar.gz
+!image.tar.gz
+!linux-2.6.35.4.tar.gz
+!arm_linux_4.3.tar.gz
 !rootfs.tar.gz
-#!applications.tar.gz
+!applications.tar.gz
 
 
